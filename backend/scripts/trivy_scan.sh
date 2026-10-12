@@ -81,7 +81,7 @@ if [[ "$mode" == "all" || "$mode" == "image" ]]; then
     image="backend-trivy/${service}:${scan_id}"
 
     echo "Building ${service} image for Trivy..."
-    if ! docker build --pull --file "${backend_dir}/${service}/Dockerfile" --tag "$image" "${backend_dir}/${service}"; then
+    if ! docker build --pull --no-cache --file "${backend_dir}/${service}/Dockerfile" --tag "$image" "${backend_dir}/${service}"; then
       echo "error: could not build ${service} image for Trivy scanning" >&2
       failed=1
       continue

@@ -24,7 +24,7 @@ security-check:
 	@status=0; \
 	for service in $(BACKEND_SERVICES); do \
 		echo "Scanning $$service..."; \
-		if ! (cd "$$service" && govulncheck ./...); then status=1; fi; \
+		if ! (cd "$$service" && govulncheck -show verbose ./...); then status=1; fi; \
 	done; \
 	bash scripts/trivy_scan.sh all; trivy_status=$$?; \
 	test "$$status" -eq 0 -a "$$trivy_status" -eq 0
