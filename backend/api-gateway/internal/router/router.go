@@ -22,9 +22,12 @@ type simpleTokenBucketLimiter struct {
 }
 
 const (
-	maxLimiterBuckets = 10000
-	badGatewayMessage = "Bad Gateway"
+	maxLimiterBuckets    = 10000
+	badGatewayMessage    = "Bad Gateway"
+	upstreamRequestLimit = 10 * time.Second
 )
+
+var upstreamHTTPClient = &nethttp.Client{Timeout: upstreamRequestLimit}
 
 type tokenBucket struct {
 	tokens   float64
@@ -123,13 +126,13 @@ func RegisterHealthEndpoints(srv *http.Server) {
 
 	srv.HandleFunc("/api/auth/health", func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		target := "http://auth-service:8081/health"
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
@@ -144,13 +147,13 @@ func RegisterHealthEndpoints(srv *http.Server) {
 
 	srv.HandleFunc("/api/users/health", func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		target := "http://user-service:8082/health"
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
@@ -165,13 +168,13 @@ func RegisterHealthEndpoints(srv *http.Server) {
 
 	srv.HandleFunc("/api/notifications/health", func(w nethttp.ResponseWriter, r *nethttp.Request) {
 		target := "http://notification-service:8083/health"
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
@@ -208,13 +211,13 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			return
 		}
 		target := "http://auth-service:8081" + r.URL.Path
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
@@ -233,13 +236,13 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			return
 		}
 		target := "http://user-service:8082" + r.URL.Path
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
@@ -258,13 +261,13 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			return
 		}
 		target := "http://notification-service:8083" + r.URL.RequestURI()
-		req, err := nethttp.NewRequest(r.Method, target, r.Body)
+		req, err := nethttp.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		req.Header = r.Header
-		resp, err := nethttp.DefaultClient.Do(req)
+		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return

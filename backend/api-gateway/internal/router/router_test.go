@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/stretchr/testify/assert"
@@ -134,6 +135,10 @@ func TestRegisterProxyRoutes(t *testing.T) {
 	// We can't easily test the registered handlers without starting the server
 	// This test mainly ensures the function doesn't panic
 	assert.NotNil(t, srv)
+}
+
+func TestUpstreamHTTPClientHasTimeout(t *testing.T) {
+	assert.Equal(t, 10*time.Second, upstreamHTTPClient.Timeout)
 }
 
 func TestMinFloat(t *testing.T) {

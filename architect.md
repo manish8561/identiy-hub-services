@@ -150,7 +150,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P0 — Security and correctness
 
-1. **Hash passwords** — Done: auth-service hashes with bcrypt on register, verifies with `CompareHashAndPassword` on login, and lazily upgrades legacy plaintext rows.
+
 2. **Gateway upstream timeouts** — Proxy calls should use an HTTP client with explicit timeouts (and eventually circuit breakers) instead of the default client.
 3. **Auth-side account delete** — `user.deleted.v1` publishing exists, but auth does not delete accounts or emit deletes; user-service delete only removes profiles. Add a full account-deletion path from auth.
 4. **Production cookie / TLS settings** — When serving over HTTPS, set `COOKIE_SECURE=true` and an appropriate `COOKIE_SAME_SITE` (e.g. `None` with Secure when cross-site).
