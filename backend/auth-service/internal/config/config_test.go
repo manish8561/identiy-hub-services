@@ -9,13 +9,14 @@ import (
 
 func TestNewCookieConfig(t *testing.T) {
 	tests := []struct {
-		name     string
-		sameSite string
-		expected http.SameSite
+		name       string
+		sameSite   string
+		expected   http.SameSite
+		wantSecure bool
 	}{
-		{name: "strict", sameSite: "strict", expected: http.SameSiteStrictMode},
-		{name: "none", sameSite: "NONE", expected: http.SameSiteNoneMode},
-		{name: "default", sameSite: "unknown", expected: http.SameSiteLaxMode},
+		{name: "strict", sameSite: "strict", expected: http.SameSiteStrictMode, wantSecure: true},
+		{name: "none", sameSite: "NONE", expected: http.SameSiteNoneMode, wantSecure: true},
+		{name: "default", sameSite: "unknown", expected: http.SameSiteLaxMode, wantSecure: true},
 	}
 
 	for _, tt := range tests {
@@ -23,13 +24,22 @@ func TestNewCookieConfig(t *testing.T) {
 			cookie := NewCookieConfig(true, 0, tt.sameSite, "example.test")
 			assert.Equal(t, AccessTokenCookieName, cookie.Name)
 			assert.Equal(t, 24*60*60, cookie.MaxAge)
-			assert.True(t, cookie.Secure)
+			assert.Equal(t, tt.wantSecure, cookie.Secure)
 			assert.True(t, cookie.HTTPOnly)
 			assert.Equal(t, "/", cookie.Path)
 			assert.Equal(t, "example.test", cookie.Domain)
 			assert.Equal(t, tt.expected, cookie.SameSite)
 		})
 	}
+}
+
+// TestNewCookieConfigNoneForceSecure verifies that SameSite=None always
+// promotes Secure to true regardless of the caller's setting, as required
+// by RFC 6265bis / browser spec.
+func TestNewCookieConfigNoneForceSecure(t *testing.T) {
+	cookie := NewCookieConfig(false, 3600, "None", "")
+	assert.Equal(t, http.SameSiteNoneMode, cookie.SameSite)
+	assert.True(t, cookie.Secure, "SameSite=None must force Secure=true")
 }
 
 func TestConfigHelpers(t *testing.T) {

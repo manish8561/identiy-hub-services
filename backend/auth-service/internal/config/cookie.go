@@ -20,6 +20,10 @@ type CookieConfig struct {
 }
 
 // NewCookieConfig builds cookie settings from environment-backed values.
+//
+// Important: SameSite=None requires the Secure flag to be set; browsers will
+// reject the cookie otherwise (RFC 6265bis). If sameSite resolves to None and
+// secure is false, secure is promoted to true automatically.
 func NewCookieConfig(secure bool, maxAge int, sameSite, domain string) *CookieConfig {
 	ss := http.SameSiteLaxMode
 	switch strings.ToLower(strings.TrimSpace(sameSite)) {
@@ -27,6 +31,8 @@ func NewCookieConfig(secure bool, maxAge int, sameSite, domain string) *CookieCo
 		ss = http.SameSiteStrictMode
 	case "none":
 		ss = http.SameSiteNoneMode
+		// SameSite=None is only valid over HTTPS; force Secure regardless of config.
+		secure = true
 	case "lax", "":
 		ss = http.SameSiteLaxMode
 	}

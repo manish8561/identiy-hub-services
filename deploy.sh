@@ -69,9 +69,9 @@ JWT_SECRET=$(openssl rand -hex 64)
 LOG_LEVEL=0
 API_GATEWAY_PORT=8080
 FRONTEND_PORT=8085
-# Set COOKIE_SECURE=true and COOKIE_SAME_SITE=None when serving over HTTPS
-COOKIE_SECURE=false
-COOKIE_SAME_SITE=Lax
+# HTTPS cookie settings — set COOKIE_SECURE=false and COOKIE_SAME_SITE=Lax only for non-HTTPS deployments
+COOKIE_SECURE=true
+COOKIE_SAME_SITE=None
 # Comma-separated origins allowed by auth/user services (set your real frontend URL)
 ALLOWED_ORIGINS=http://localhost:8085
 EOF

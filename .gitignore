@@ -1,3 +1,4 @@
 *.env
+!.env.example
 .cursor/
 .vscode/
