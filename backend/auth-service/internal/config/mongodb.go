@@ -38,6 +38,11 @@ func NewMongoDBConfig(uri, dbName string) (*MongoDBConfig, error) {
 	}, nil
 }
 
+// NewMongoDBConfigFromDatabase wraps an existing MongoDB database.
+func NewMongoDBConfigFromDatabase(database *mongo.Database) *MongoDBConfig {
+	return &MongoDBConfig{client: database.Client(), database: database}
+}
+
 // GetCollection returns a MongoDB collection
 func (m *MongoDBConfig) GetCollection(name string) *mongo.Collection {
 	return m.database.Collection(name)

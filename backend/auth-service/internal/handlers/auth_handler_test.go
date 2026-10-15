@@ -140,6 +140,30 @@ func TestAuthHandlerMeRejectsMissingOrInvalidToken(t *testing.T) {
 	}
 }
 
+func TestAuthHandlerDeleteAccountRejectsMissingOrInvalidToken(t *testing.T) {
+	r, _, _ := setupAuthRouter(t)
+
+	tests := []struct {
+		name    string
+		request *http.Request
+	}{
+		{name: "missing token", request: httptest.NewRequest(http.MethodDelete, "/api/auth/account", nil)},
+		{name: "invalid token", request: func() *http.Request {
+			request := httptest.NewRequest(http.MethodDelete, "/api/auth/account", nil)
+			request.Header.Set("Authorization", "Bearer invalid")
+			return request
+		}()},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			r.ServeHTTP(response, test.request)
+			assert.Equal(t, http.StatusUnauthorized, response.Code)
+		})
+	}
+}
+
 func TestAuthHandlerLogoutClearsCookie(t *testing.T) {
 	r, cookieConfig, _ := setupAuthRouter(t)
 	response := httptest.NewRecorder()

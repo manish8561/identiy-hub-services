@@ -6,21 +6,30 @@ import (
 	"auth-service/internal/password"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // AuthService handles authentication-related business logic
 type AuthService struct {
 	mongoConfig *config.MongoDBConfig
 	jwtService  *JWTService
-	publisher   *KafkaPublisher
+	publisher   UserEventPublisher
+}
+
+// UserEventPublisher publishes user lifecycle events.
+type UserEventPublisher interface {
+	PublishUserCreated(ctx context.Context, event models.UserEvent) error
+	PublishUserUpdated(ctx context.Context, event models.UserEvent) error
+	PublishUserDeleted(ctx context.Context, event models.UserEvent) error
 }
 
 // NewAuthService creates a new AuthService with the provided dependencies
-func NewAuthService(mongoConfig *config.MongoDBConfig, jwtService *JWTService, publisher *KafkaPublisher) *AuthService {
+func NewAuthService(mongoConfig *config.MongoDBConfig, jwtService *JWTService, publisher UserEventPublisher) *AuthService {
 	return &AuthService{
 		mongoConfig: mongoConfig,
 		jwtService:  jwtService,
@@ -119,9 +128,11 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		Role:      newUser.Role,
 	}
 
-	if err := s.publisher.PublishUserCreated(ctx, event); err != nil {
-		// Registration should succeed even if async sync event publishing fails.
-		// Retry/reconciliation can handle eventual consistency.
+	if s.publisher != nil {
+		if err := s.publisher.PublishUserCreated(ctx, event); err != nil {
+			// Registration should succeed even if async sync event publishing fails.
+			// Retry/reconciliation can handle eventual consistency.
+		}
 	}
 
 	token, err := s.jwtService.GenerateToken(newUser.ID)
@@ -134,6 +145,43 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		Message: "User registered successfully",
 		Token:   token,
 	}, nil
+}
+
+// DeleteAccount removes an account and publishes its deletion event.
+// If publishing fails after the account is deleted, a subsequent call with the
+// same user ID republishes the event, allowing clients to retry propagation.
+func (s *AuthService) DeleteAccount(userID string) error {
+	if s.publisher == nil {
+		return errors.New("publish deletion event: publisher is not configured")
+	}
+
+	collection := s.mongoConfig.GetCollection("auth_users")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var user models.User
+	err := collection.FindOneAndDelete(ctx, bson.M{"_id": userID}).Decode(&user)
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return fmt.Errorf("delete account: %w", err)
+	}
+
+	event := models.UserEvent{
+		EventID:   primitive.NewObjectID().Hex(),
+		EventType: "user.deleted.v1",
+		Timestamp: time.Now().UTC(),
+		UserID:    userID,
+	}
+	if user.ID != "" {
+		event.Email = user.Email
+		event.Name = user.Name
+		event.Status = user.Status
+		event.Role = user.Role
+	}
+	if err := s.publisher.PublishUserDeleted(ctx, event); err != nil {
+		return fmt.Errorf("account deleted but failed to publish deletion event: %w", err)
+	}
+
+	return nil
 }
 
 // ValidateToken validates a JWT token and returns user information

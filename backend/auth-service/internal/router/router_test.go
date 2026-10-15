@@ -51,7 +51,8 @@ func TestNewRouter_RegistersAuthRoutes(t *testing.T) {
 		{http.MethodPost, "/api/auth/validate", http.StatusBadRequest},  // Will fail due to missing token
 		{http.MethodPost, "/api/auth/refresh", http.StatusUnauthorized}, // Will fail due to missing token
 		{http.MethodGet, "/api/auth/me", http.StatusUnauthorized},       // Will fail due to missing token
-		{http.MethodPost, "/api/auth/logout", http.StatusOK},            // Should succeed
+		{http.MethodDelete, "/api/auth/account", http.StatusUnauthorized},
+		{http.MethodPost, "/api/auth/logout", http.StatusOK}, // Should succeed
 	}
 
 	for _, tc := range testCases {

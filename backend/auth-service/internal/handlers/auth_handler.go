@@ -184,6 +184,33 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// DeleteAccount removes the account associated with the current session.
+func (h *AuthHandler) DeleteAccount(c *gin.Context) {
+	token := h.extractToken(c)
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	response, err := h.authService.ValidateToken(token)
+	if err != nil || !response.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.authService.DeleteAccount(response.UserID); err != nil {
+		h.logger.Error("Failed to delete account",
+			zap.String("user_id", response.UserID),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.clearAccessTokenCookie(c)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "account deleted"})
+}
+
 // Logout clears the access token cookie.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	h.clearAccessTokenCookie(c)

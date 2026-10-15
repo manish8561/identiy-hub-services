@@ -242,6 +242,7 @@ The repository-level `test.sh` script starts the test MongoDB container and runs
    MONGO_URI=mongodb://localhost:27017
    MONGO_DB=auth_db
    JWT_SECRET=your-secret-key
+   KAFKA_BROKERS=localhost:9092
    COOKIE_SECURE=false
    COOKIE_SAME_SITE=Lax
    ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8085
@@ -281,6 +282,9 @@ curl -c cookies.txt -X POST http://localhost:8080/api/auth/register \
 
 # Current session
 curl -b cookies.txt http://localhost:8080/api/auth/me
+
+# Delete the account (also removes the user profile)
+curl -b cookies.txt -X DELETE http://localhost:8080/api/auth/account
 
 # Logout
 curl -b cookies.txt -X POST http://localhost:8080/api/auth/logout

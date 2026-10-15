@@ -56,8 +56,11 @@ func splitBrokers(brokers string) []string {
 }
 
 func (p *KafkaPublisher) publish(ctx context.Context, topic string, event models.UserEvent) error {
-	if p == nil || p.writer == nil || topic == "" {
-		return nil
+	if p == nil || p.writer == nil {
+		return fmt.Errorf("publish user event: Kafka publisher is not configured")
+	}
+	if topic == "" {
+		return fmt.Errorf("publish user event: Kafka topic is not configured")
 	}
 
 	payload, err := json.Marshal(event)

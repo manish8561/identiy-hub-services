@@ -29,12 +29,12 @@ func TestNewKafkaPublisher(t *testing.T) {
 	assert.Nil(t, publisher)
 }
 
-func TestKafkaPublisherEmptyStateNoops(t *testing.T) {
+func TestKafkaPublisherEmptyStateReturnsErrors(t *testing.T) {
 	publisher := &KafkaPublisher{}
 	event := models.UserEvent{UserID: "user-123", EventType: "user.created.v1"}
 
-	assert.NoError(t, publisher.PublishUserCreated(context.Background(), event))
-	assert.NoError(t, publisher.PublishUserUpdated(context.Background(), event))
-	assert.NoError(t, publisher.PublishUserDeleted(context.Background(), event))
+	assert.Error(t, publisher.PublishUserCreated(context.Background(), event))
+	assert.Error(t, publisher.PublishUserUpdated(context.Background(), event))
+	assert.Error(t, publisher.PublishUserDeleted(context.Background(), event))
 	assert.NoError(t, publisher.Close())
 }

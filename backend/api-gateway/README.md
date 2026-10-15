@@ -191,6 +191,7 @@ The API Gateway proxies requests to the appropriate services:
 - `POST /api/auth/register` - User registration  
 - `POST /api/auth/validate` - Token validation
 - `POST /api/auth/refresh` - Token refresh
+- `DELETE /api/auth/account` - Delete the authenticated account and clear its session
 - `GET /api/auth/health` - Auth service health
 
 ### User Management (proxied to user-service)

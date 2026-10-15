@@ -271,6 +271,37 @@ paths:
                 "502":
                     description: Auth service unavailable
 
+    /api/auth/account:
+        delete:
+            tags:
+                - Auth
+            summary: Delete the current user account
+            description: Delete the authenticated account and publish a user.deleted.v1 event to remove its profile.
+            operationId: AuthService_DeleteAccount
+            security:
+                - cookieAuth: []
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Account deleted and session cleared
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: success
+                                    message:
+                                        type: string
+                                        example: account deleted
+                "401":
+                    description: Missing, invalid, or expired session token
+                "500":
+                    description: Account deletion or deletion event publication failed
+                "502":
+                    description: Auth service unavailable
+
     /api/users/profile/me:
         get:
             tags:
@@ -339,6 +370,11 @@ paths:
                     description: User service unavailable
 components:
     securitySchemes:
+        cookieAuth:
+            type: apiKey
+            in: cookie
+            name: access_token
+            description: HttpOnly session cookie set by login and register
         bearerAuth:
             type: http
             scheme: bearer

@@ -57,6 +57,8 @@ func main() {
 	)
 	if err != nil {
 		log.Error("Failed to initialize Kafka publisher", zap.Error(err))
+	} else if kafkaPublisher == nil {
+		log.Warn("Kafka publisher is not configured; account deletion is unavailable")
 	}
 	defer func() {
 		if kafkaPublisher != nil {
@@ -67,7 +69,11 @@ func main() {
 	}()
 
 	// Initialize services
-	authService := services.NewAuthService(mongoConfig, jwtService, kafkaPublisher)
+	var userEventPublisher services.UserEventPublisher
+	if kafkaPublisher != nil {
+		userEventPublisher = kafkaPublisher
+	}
+	authService := services.NewAuthService(mongoConfig, jwtService, userEventPublisher)
 	authHandler := handlers.NewAuthHandler(authService, log, cookieConfig)
 	log.Info("Auth service and handlers initialized")
 
