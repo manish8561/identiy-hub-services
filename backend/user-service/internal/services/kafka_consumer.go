@@ -144,9 +144,9 @@ func (c *UserEventConsumer) handleEvent(topic string, event models.UserEvent) er
 		return c.service.DeleteUserProfileFromEvent(event)
 	default:
 		switch event.EventType {
-		case "user.created.v1", "user.updated.v1":
+		case models.EventTypeUserCreated, models.EventTypeUserUpdated:
 			return c.service.UpsertUserProfileFromEvent(event)
-		case "user.deleted.v1":
+		case models.EventTypeUserDeleted:
 			return c.service.DeleteUserProfileFromEvent(event)
 		default:
 			c.logger.Warn("Ignoring unknown user event type", zap.String("event_type", event.EventType))

@@ -2,6 +2,12 @@ package models
 
 import "time"
 
+const (
+	EventTypeUserCreated = "user.created.v1"
+	EventTypeUserUpdated = "user.updated.v1"
+	EventTypeUserDeleted = "user.deleted.v1"
+)
+
 // UserEvent represents user lifecycle changes published to Kafka.
 type UserEvent struct {
 	EventID   string    `json:"event_id"`

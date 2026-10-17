@@ -119,7 +119,7 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 
 	event := models.UserEvent{
 		EventID:   primitive.NewObjectID().Hex(),
-		EventType: "user.created.v1",
+		EventType: models.EventTypeUserCreated,
 		Timestamp: time.Now().UTC(),
 		UserID:    newUser.ID,
 		Email:     newUser.Email,
@@ -167,7 +167,7 @@ func (s *AuthService) DeleteAccount(userID string) error {
 
 	event := models.UserEvent{
 		EventID:   primitive.NewObjectID().Hex(),
-		EventType: "user.deleted.v1",
+		EventType: models.EventTypeUserDeleted,
 		Timestamp: time.Now().UTC(),
 		UserID:    userID,
 	}

@@ -112,7 +112,7 @@ func (s *UserService) UpdateUser(id string, req models.UpdateUserRequest) (*mode
 
 	event := models.UserEvent{
 		EventID:   primitive.NewObjectID().Hex(),
-		EventType: "user.updated.v1",
+		EventType: models.EventTypeUserUpdated,
 		Timestamp: time.Now().UTC(),
 		UserID:    updatedUser.ID,
 		Email:     updatedUser.Email,
@@ -144,7 +144,7 @@ func (s *UserService) DeleteUser(id string) error {
 
 	event := models.UserEvent{
 		EventID:   primitive.NewObjectID().Hex(),
-		EventType: "user.deleted.v1",
+		EventType: models.EventTypeUserDeleted,
 		Timestamp: time.Now().UTC(),
 		UserID:    id,
 	}
@@ -213,7 +213,7 @@ func (s *UserService) CreateUser(req models.CreateUserRequest) (*models.User, er
 
 	event := models.UserEvent{
 		EventID:   primitive.NewObjectID().Hex(),
-		EventType: "user.created.v1",
+		EventType: models.EventTypeUserCreated,
 		Timestamp: time.Now().UTC(),
 		UserID:    user.ID,
 		Email:     user.Email,
