@@ -2,89 +2,151 @@
   <header>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <h1 class="text-3xl font-bold leading-tight text-gray-900">
-        Welcome to your Dashboard
+        Welcome{{ user?.name ? ", " + user?.name : "" }}
       </h1>
     </div>
   </header>
   <main>
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-      <!-- Stats -->
-      <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <!-- Stat 1 -->
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="p-5">
-            <div class="flex items-center">
-              <div class="flex-shrink-0">
-                <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <div class="ml-5 w-0 flex-1">
-                <dl>
-                  <dt class="text-sm font-medium text-gray-500 truncate">
-                    Total Users
-                  </dt>
-                  <dd class="flex items-baseline">
-                    <div class="text-2xl font-semibold text-gray-900">
-                      1,234
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
+    <section
+      class="max-w-7xl mx-auto mt-8 px-4 sm:px-6 lg:px-8"
+      aria-labelledby="users-heading"
+    >
+      <div class="overflow-hidden rounded-lg bg-white shadow">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-5"
+        >
+          <div>
+            <h2 id="users-heading" class="text-lg font-medium text-gray-900">
+              Users
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+              Browse registered customer accounts.
+            </p>
           </div>
+          <a
+            routerLink="/profile"
+            class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+          >
+            Manage your profile
+          </a>
         </div>
 
-        <!-- Stat 2 -->
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="p-5">
-            <div class="flex items-center">
-              <div class="flex-shrink-0">
-                <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div class="ml-5 w-0 flex-1">
-                <dl>
-                  <dt class="text-sm font-medium text-gray-500 truncate">
-                    Total Revenue
-                  </dt>
-                  <dd class="flex items-baseline">
-                    <div class="text-2xl font-semibold text-gray-900">
-                      $45,231
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
+        <p
+          *ngIf="loadingUsers"
+          class="px-6 py-8 text-sm text-gray-500"
+          role="status"
+        >
+          Loading users...
+        </p>
+        <p
+          *ngIf="!loadingUsers && userListError"
+          class="px-6 py-8 text-sm text-red-700"
+          role="alert"
+        >
+          {{ userListError }}
+        </p>
+        <p
+          *ngIf="!loadingUsers && !userListError && users.length === 0"
+          class="px-6 py-8 text-sm text-gray-500"
+        >
+          No users found.
+        </p>
+
+        <div
+          *ngIf="!loadingUsers && !userListError && users.length > 0"
+          class="overflow-x-auto"
+        >
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  Name
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  Email
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  Joined
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  Account
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 bg-white">
+              <tr *ngFor="let listedUser of users">
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900"
+                >
+                  {{ listedUser.name }}
+                </td>
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
+                >
+                  {{ listedUser.email }}
+                </td>
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
+                >
+                  {{ listedUser.createdAt | date: "mediumDate" }}
+                </td>
+                <td class="whitespace-nowrap px-6 py-4 text-sm">
+                  <a
+                    *ngIf="listedUser.id === user?.id"
+                    routerLink="/profile"
+                    class="font-medium text-emerald-800 hover:text-emerald-950"
+                  >
+                    Manage
+                  </a>
+                  <span
+                    *ngIf="listedUser.id !== user?.id"
+                    class="text-gray-400"
+                  >
+                    —
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- Stat 3 -->
-        <div class="bg-white overflow-hidden shadow rounded-lg">
-          <div class="p-5">
-            <div class="flex items-center">
-              <div class="flex-shrink-0">
-                <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
-              </div>
-              <div class="ml-5 w-0 flex-1">
-                <dl>
-                  <dt class="text-sm font-medium text-gray-500 truncate">
-                    Growth Rate
-                  </dt>
-                  <dd class="flex items-baseline">
-                    <div class="text-2xl font-semibold text-gray-900">
-                      12.5%
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
+        <div
+          *ngIf="totalUsers > pageSize"
+          class="flex items-center justify-between border-t border-gray-200 px-6 py-4"
+        >
+          <button
+            type="button"
+            class="text-sm font-medium text-emerald-800 disabled:text-gray-400"
+            [disabled]="page <= 1 || loadingUsers"
+            (click)="changePage(page - 1)"
+          >
+            Previous
+          </button>
+          <span class="text-sm text-gray-500">
+            Page {{ page }} of {{ pageCount }}
+          </span>
+          <button
+            type="button"
+            class="text-sm font-medium text-emerald-800 disabled:text-gray-400"
+            [disabled]="page >= pageCount || loadingUsers"
+            (click)="changePage(page + 1)"
+          >
+            Next
+          </button>
         </div>
       </div>
-    </div>
+    </section>
   </main>
 </div>

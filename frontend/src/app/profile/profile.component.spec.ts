@@ -1,19 +1,47 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { Router } from '@angular/router';
 
 import { ProfileComponent } from './profile.component';
 import { AuthService } from '../services/auth.service';
 import { NotificationService } from '../services/notification.service';
+import { ToastService } from '../services/toast.service';
+import { UserService } from '../services/user.service';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let fixture: ComponentFixture<ProfileComponent>;
+  const profile = {
+    id: 'user-1',
+    name: 'Test User',
+    email: 'user@example.com',
+    role: 'customer',
+    createdAt: '',
+    updatedAt: '',
+  };
+  const authService = {
+    getProfile: () => of(profile),
+    invalidateProfileCache: jasmine.createSpy(),
+    logout: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
+    clearSession: jasmine.createSpy(),
+  };
+  const userService = {
+    updateProfile: jasmine.createSpy().and.returnValue(of(profile)),
+    deleteProfile: jasmine.createSpy().and.returnValue(of({ message: 'deleted' })),
+  };
+  const router = { navigate: jasmine.createSpy().and.returnValue(Promise.resolve(true)) };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ProfileComponent],
       providers: [
-        { provide: AuthService, useValue: { getProfile: () => of({}) } },
+        { provide: AuthService, useValue: authService },
+        { provide: UserService, useValue: userService },
+        { provide: Router, useValue: router },
+        {
+          provide: ToastService,
+          useValue: { error: jasmine.createSpy(), success: jasmine.createSpy() },
+        },
         {
           provide: NotificationService,
           useValue: {
@@ -34,5 +62,32 @@ describe('ProfileComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('updates the authenticated user profile', () => {
+    component.startEditingProfile();
+    component.profileForm.setValue({
+      name: 'Updated Name',
+      email: 'updated@example.com',
+    });
+
+    component.saveProfile();
+
+    expect(userService.updateProfile).toHaveBeenCalledWith('user-1', {
+      name: 'Updated Name',
+      email: 'updated@example.com',
+      role: 'customer',
+    });
+    expect(authService.invalidateProfileCache).toHaveBeenCalled();
+    expect(component.editingProfile).toBeFalse();
+  });
+
+  it('deletes the account, logs out, and navigates to login', () => {
+    component.deleteAccount();
+
+    expect(userService.deleteProfile).toHaveBeenCalledWith('user-1');
+    expect(authService.logout).toHaveBeenCalled();
+    expect(authService.clearSession).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 });

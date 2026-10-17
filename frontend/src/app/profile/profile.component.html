@@ -10,20 +10,107 @@
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
       <div class="mt-8">
         <div
-          *ngIf="user && user.name && user.email"
-          class="bg-white shadow rounded-lg p-6"
+          *ngIf="errorMessage"
+          class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          role="alert"
         >
+          {{ errorMessage }}
+        </div>
+        <div *ngIf="user" class="rounded-lg bg-white p-6 shadow">
           <div class="space-y-4">
-            <div>
-              <h3 class="text-lg font-medium text-gray-900">
-                Personal Information
-              </h3>
-              <p class="text-sm text-gray-500">
-                Your account details and preferences
-              </p>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 class="text-lg font-medium text-gray-900">
+                  Personal Information
+                </h3>
+                <p class="text-sm text-gray-500">
+                  Review and update your account details.
+                </p>
+              </div>
+              <button
+                *ngIf="!editingProfile"
+                type="button"
+                class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+                (click)="startEditingProfile()"
+              >
+                Edit profile
+              </button>
             </div>
             <div class="border-t border-gray-200 pt-4">
-              <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+              <form
+                *ngIf="editingProfile"
+                [formGroup]="profileForm"
+                (ngSubmit)="saveProfile()"
+                class="space-y-4"
+              >
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label class="block text-sm font-medium text-gray-700">
+                    Name
+                    <input
+                      type="text"
+                      formControlName="name"
+                      autocomplete="name"
+                      class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                      [attr.aria-invalid]="
+                        profileForm.controls['name'].invalid &&
+                        profileForm.controls['name'].touched
+                      "
+                    />
+                    <span
+                      *ngIf="
+                        profileForm.controls['name'].invalid &&
+                        profileForm.controls['name'].touched
+                      "
+                      class="mt-1 block text-sm text-red-700"
+                    >
+                      Enter a name (up to 100 characters).
+                    </span>
+                  </label>
+                  <label class="block text-sm font-medium text-gray-700">
+                    Email
+                    <input
+                      type="email"
+                      formControlName="email"
+                      autocomplete="email"
+                      class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                      [attr.aria-invalid]="
+                        profileForm.controls['email'].invalid &&
+                        profileForm.controls['email'].touched
+                      "
+                    />
+                    <span
+                      *ngIf="
+                        profileForm.controls['email'].invalid &&
+                        profileForm.controls['email'].touched
+                      "
+                      class="mt-1 block text-sm text-red-700"
+                    >
+                      Enter a valid email address.
+                    </span>
+                  </label>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                  <button
+                    type="submit"
+                    [disabled]="savingProfile"
+                    class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {{ savingProfile ? "Saving..." : "Save changes" }}
+                  </button>
+                  <button
+                    type="button"
+                    [disabled]="savingProfile"
+                    class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    (click)="cancelEditingProfile()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+              <dl
+                *ngIf="!editingProfile"
+                class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2"
+              >
                 <div>
                   <dt class="text-sm font-medium text-gray-500">Name</dt>
                   <dd class="mt-1 text-sm text-gray-900">{{ user.name }}</dd>
@@ -48,6 +135,57 @@
             </div>
           </div>
         </div>
+        <section
+          *ngIf="user"
+          class="mt-8 rounded-lg border border-red-200 bg-white p-6 shadow"
+          aria-labelledby="delete-account-title"
+        >
+          <h2
+            id="delete-account-title"
+            class="text-lg font-medium text-gray-900"
+          >
+            Delete account
+          </h2>
+          <p class="mt-1 text-sm text-gray-600">
+            Permanently delete your account. You will be logged out after the
+            deletion succeeds.
+          </p>
+          <div *ngIf="!confirmingAccountDeletion" class="mt-4">
+            <button
+              type="button"
+              class="rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+              (click)="requestAccountDeletion()"
+            >
+              Delete my account
+            </button>
+          </div>
+          <div
+            *ngIf="confirmingAccountDeletion"
+            class="mt-4 rounded-md bg-red-50 p-4"
+          >
+            <p class="text-sm font-medium text-red-800">
+              Are you sure? This action cannot be undone.
+            </p>
+            <div class="mt-3 flex flex-wrap gap-3">
+              <button
+                type="button"
+                [disabled]="deletingAccount"
+                class="rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                (click)="deleteAccount()"
+              >
+                {{ deletingAccount ? "Deleting account..." : "Confirm deletion" }}
+              </button>
+              <button
+                type="button"
+                [disabled]="deletingAccount"
+                class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                (click)="cancelAccountDeletion()"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </section>
         <section
           class="mt-8 bg-white shadow rounded-lg p-6"
           aria-labelledby="notification-settings-title"
@@ -157,30 +295,6 @@
             </div>
           </div>
         </section>
-        <div
-          *ngIf="errorMessage"
-          class="mt-4 bg-red-50 border border-red-200 rounded-md p-4"
-        >
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg
-                class="h-5 w-5 text-red-400"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </div>
-            <div class="ml-3">
-              <p class="text-sm text-red-700">{{ errorMessage }}</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </main>

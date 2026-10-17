@@ -179,6 +179,10 @@ export class AuthService {
     this.authCheckTimestamp = 0;
   }
 
+  invalidateProfileCache(): void {
+    this.cachedProfile = null;
+  }
+
   isBrowser(): boolean {
     return typeof window !== 'undefined';
   }

@@ -8,15 +8,23 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  role?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface UserListResponse {
-  users: UserProfile[];
+  users: UserProfile[] | null;
   total: number;
+  totalCount?: number;
   page: number;
-  limit: number;
+  size: number;
+}
+
+export interface UpdateUserRequest {
+  name: string;
+  email: string;
+  role: string;
 }
 
 @Injectable({
@@ -33,7 +41,11 @@ export class UserService {
     if (error.error instanceof ErrorEvent) {
       errorMessage = `Error: ${error.error.message}`;
     } else {
-      errorMessage = `Error Code: ${error.status}\nMessage: ${error.error?.message || error.message}`;
+      const responseMessage =
+        typeof error.error === 'string'
+          ? error.error
+          : error.error?.message || error.error?.error;
+      errorMessage = `Error Code: ${error.status}\nMessage: ${responseMessage || error.message}`;
     }
     console.error(errorMessage);
     return throwError(() => new Error(errorMessage));
@@ -57,22 +69,31 @@ export class UserService {
     );
   }
 
-  listUsers(page: number = 1, limit: number = 10): Observable<UserListResponse> {
+  listUsers(page: number = 1, size: number = 10): Observable<UserListResponse> {
     return this.http.get<UserListResponse>(
       `${this.apiUrl}/users/list`,
       {
         ...this.httpOptions,
-        params: { page: page.toString(), limit: limit.toString() }
+        params: { page: page.toString(), size: size.toString() }
       }
     ).pipe(
       catchError(this.handleError)
     );
   }
 
-  updateProfile(userId: string, profileData: Partial<UserProfile>): Observable<UserProfile> {
+  updateProfile(userId: string, profileData: UpdateUserRequest): Observable<UserProfile> {
     return this.http.put<UserProfile>(
       `${this.apiUrl}/users/profile/${userId}`,
       profileData,
+      this.httpOptions
+    ).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  deleteProfile(userId: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `${this.apiUrl}/users/profile/${userId}`,
       this.httpOptions
     ).pipe(
       catchError(this.handleError)
