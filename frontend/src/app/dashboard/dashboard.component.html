@@ -2,12 +2,32 @@
   <header>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <h1 class="text-3xl font-bold leading-tight text-gray-900">
-        Welcome{{ user?.name ? ", " + user?.name : "" }}
+        {{ isAdmin ? "Admin dashboard" : "Welcome" }}{{ user?.name ? ", " + user?.name : "" }}
       </h1>
     </div>
   </header>
+
   <main>
     <section
+      *ngIf="!isAdmin"
+      class="max-w-7xl mx-auto mt-8 px-4 sm:px-6 lg:px-8"
+    >
+      <div class="rounded-lg bg-white p-6 shadow">
+        <h2 class="text-lg font-medium text-gray-900">Your account</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          View and update your profile and account preferences.
+        </p>
+        <a
+          routerLink="/profile"
+          class="mt-4 inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+        >
+          Manage your profile
+        </a>
+      </div>
+    </section>
+
+    <section
+      *ngIf="isAdmin"
       class="max-w-7xl mx-auto mt-8 px-4 sm:px-6 lg:px-8"
       aria-labelledby="users-heading"
     >
@@ -20,7 +40,7 @@
               Users
             </h2>
             <p class="mt-1 text-sm text-gray-500">
-              Browse registered customer accounts.
+              Review and manage registered customer accounts.
             </p>
           </div>
           <a
@@ -81,43 +101,147 @@
                   scope="col"
                   class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
                 >
-                  Account
+                  Actions
                 </th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-              <tr *ngFor="let listedUser of users">
-                <td
-                  class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900"
-                >
-                  {{ listedUser.name }}
-                </td>
-                <td
-                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
-                >
-                  {{ listedUser.email }}
-                </td>
-                <td
-                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
-                >
-                  {{ listedUser.createdAt | date: "mediumDate" }}
-                </td>
-                <td class="whitespace-nowrap px-6 py-4 text-sm">
-                  <a
-                    *ngIf="listedUser.id === user?.id"
-                    routerLink="/profile"
-                    class="font-medium text-emerald-800 hover:text-emerald-950"
+              <ng-container *ngFor="let listedUser of users">
+                <tr *ngIf="editingUserId !== listedUser.id">
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900"
                   >
-                    Manage
-                  </a>
-                  <span
-                    *ngIf="listedUser.id !== user?.id"
-                    class="text-gray-400"
+                    {{ listedUser.name }}
+                  </td>
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
                   >
-                    —
-                  </span>
-                </td>
-              </tr>
+                    {{ listedUser.email }}
+                  </td>
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
+                  >
+                    {{ listedUser.createdAt | date: "mediumDate" }}
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm">
+                    <div
+                      *ngIf="confirmingDeleteUserId !== listedUser.id"
+                      class="flex items-center gap-3"
+                    >
+                      <button
+                        type="button"
+                        class="font-medium text-emerald-800 hover:text-emerald-950"
+                        (click)="startEditingUser(listedUser)"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        class="font-medium text-red-700 hover:text-red-900"
+                        (click)="requestUserDeletion(listedUser.id)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div
+                      *ngIf="confirmingDeleteUserId === listedUser.id"
+                      class="space-y-2"
+                    >
+                      <p class="text-sm text-red-800">
+                        Permanently delete {{ listedUser.name }}?
+                      </p>
+                      <div class="flex items-center gap-3">
+                        <button
+                          type="button"
+                          [disabled]="deletingUserId === listedUser.id"
+                          class="font-medium text-red-700 disabled:opacity-50"
+                          (click)="deleteUser(listedUser)"
+                        >
+                          {{
+                            deletingUserId === listedUser.id
+                              ? "Deleting..."
+                              : "Confirm"
+                          }}
+                        </button>
+                        <button
+                          type="button"
+                          [disabled]="deletingUserId === listedUser.id"
+                          class="font-medium text-gray-600 disabled:opacity-50"
+                          (click)="cancelUserDeletion()"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                <tr *ngIf="editingUserId === listedUser.id">
+                  <td colspan="4" class="bg-gray-50 px-6 py-4">
+                    <form
+                      [formGroup]="userForm"
+                      (ngSubmit)="saveUser(listedUser)"
+                      class="grid grid-cols-1 gap-4 sm:grid-cols-4"
+                    >
+                      <label class="block text-sm font-medium text-gray-700">
+                        Name
+                        <input
+                          type="text"
+                          formControlName="name"
+                          autocomplete="name"
+                          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                        />
+                      </label>
+                      <label class="block text-sm font-medium text-gray-700">
+                        Email
+                        <input
+                          type="email"
+                          formControlName="email"
+                          autocomplete="email"
+                          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                        />
+                      </label>
+                      <label class="block text-sm font-medium text-gray-700">
+                        Role
+                        <select
+                          formControlName="role"
+                          class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                        >
+                          <option value="customer">Customer</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </label>
+                      <div class="flex items-end gap-3">
+                        <button
+                          type="submit"
+                          [disabled]="savingUserId === listedUser.id"
+                          class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {{
+                            savingUserId === listedUser.id
+                              ? "Saving..."
+                              : "Save"
+                          }}
+                        </button>
+                        <button
+                          type="button"
+                          [disabled]="savingUserId === listedUser.id"
+                          class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white disabled:opacity-50"
+                          (click)="cancelEditingUser()"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <p
+                        *ngIf="userForm.invalid && userForm.touched"
+                        class="text-sm text-red-700 sm:col-span-4"
+                        role="alert"
+                      >
+                        Enter a name (up to 100 characters) and a valid email.
+                      </p>
+                    </form>
+                  </td>
+                </tr>
+              </ng-container>
             </tbody>
           </table>
         </div>

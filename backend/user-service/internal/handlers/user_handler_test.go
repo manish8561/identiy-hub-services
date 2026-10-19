@@ -150,6 +150,7 @@ func TestUpdateUser_Success(t *testing.T) {
 	updateReq := models.UpdateUserRequest{
 		Name:  "updateduser",
 		Email: "updated@example.com",
+		Role:  "customer",
 	}
 
 	expectedUser := &models.User{
@@ -158,6 +159,7 @@ func TestUpdateUser_Success(t *testing.T) {
 		Email: "updated@example.com",
 	}
 
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
 	mockUserService.On("UpdateUser", "123", updateReq).Return(expectedUser, nil)
 
 	reqBody, _ := json.Marshal(updateReq)
@@ -207,6 +209,7 @@ func TestListUsers_Success(t *testing.T) {
 		Total:      2,
 	}
 
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
 	mockUserService.On("ListUsers", 1, 10).Return(expectedResponse, nil)
 
 	req, _ := http.NewRequest("GET", "/api/users/list?page=1&size=10", nil)
@@ -256,6 +259,7 @@ func TestListUsers_DefaultsInvalidPaginationValues(t *testing.T) {
 	r := setupTestRouter(mockUserService)
 
 	expectedResponse := &models.UserListResponse{Users: []models.User{{ID: "123", Name: "testuser", Email: "test@example.com"}}, Page: 1, Size: 10, TotalCount: 1, Total: 1}
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
 	mockUserService.On("ListUsers", 1, 10).Return(expectedResponse, nil)
 
 	req, _ := http.NewRequest("GET", "/api/users/list?page=0&size=9999", nil)
@@ -280,4 +284,121 @@ func TestDeleteUser_RejectsMissingUserIDParam(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.JSONEq(t, `{"error":"user ID is required"}`, w.Body.String())
+}
+
+func TestListUsers_RejectsNonAdmin(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/users/list", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "ListUsers", mock.Anything, mock.Anything)
+}
+
+func TestUpdateUser_RejectsNonAdminUpdatingAnotherUser(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
+
+	body, _ := json.Marshal(models.UpdateUserRequest{
+		Name:  "another user",
+		Email: "another@example.com",
+		Role:  "customer",
+	})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/users/profile/other-user", bytes.NewReader(body)))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "UpdateUser", mock.Anything, mock.Anything)
+}
+
+func TestDeleteUser_RejectsNonAdminDeletingAnotherUser(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users/profile/other-user", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "DeleteUser", mock.Anything)
+}
+
+func TestUpdateUser_RejectsSelfPromotion(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
+
+	body, _ := json.Marshal(models.UpdateUserRequest{
+		Name:  "testuser",
+		Email: "test@example.com",
+		Role:  "admin",
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/users/profile/123", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "UpdateUser", mock.Anything, mock.Anything)
+}
+
+func TestUserResponseOmitsPassword(t *testing.T) {
+	user := models.User{ID: "123", Password: "hashed-password"}
+	body, err := json.Marshal(user)
+
+	assert.NoError(t, err)
+	assert.NotContains(t, string(body), "password")
+	assert.NotContains(t, string(body), "hashed-password")
+}
+
+func TestUpdateUser_AdminCanUpdateAnotherUser(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	request := models.UpdateUserRequest{
+		Name:  "Updated customer",
+		Email: "updated@example.com",
+		Role:  "customer",
+	}
+	updatedUser := &models.User{
+		ID:    "other-user",
+		Name:  request.Name,
+		Email: request.Email,
+		Role:  request.Role,
+	}
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
+	mockUserService.On("UpdateUser", "other-user", request).Return(updatedUser, nil)
+
+	body, _ := json.Marshal(request)
+	req := httptest.NewRequest(http.MethodPut, "/api/users/profile/other-user", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockUserService.AssertExpectations(t)
+}
+
+func TestDeleteUser_AdminCanDeleteAnotherUser(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
+	mockUserService.On("DeleteUser", "other-user").Return(nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users/profile/other-user", nil))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	mockUserService.AssertExpectations(t)
 }

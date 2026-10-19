@@ -2,7 +2,7 @@
   <header>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <h1 class="text-3xl font-bold leading-tight text-gray-900">
-        User Profile
+        {{ user?.role === "admin" ? "Admin Profile" : "User Profile" }}
       </h1>
     </div>
   </header>
@@ -118,6 +118,12 @@
                 <div>
                   <dt class="text-sm font-medium text-gray-500">Email</dt>
                   <dd class="mt-1 text-sm text-gray-900">{{ user.email }}</dd>
+                </div>
+                <div *ngIf="user.role">
+                  <dt class="text-sm font-medium text-gray-500">Role</dt>
+                  <dd class="mt-1 text-sm capitalize text-gray-900">
+                    {{ user.role }}
+                  </dd>
                 </div>
                 <div *ngIf="user.createdAt">
                   <dt class="text-sm font-medium text-gray-500">Created At</dt>

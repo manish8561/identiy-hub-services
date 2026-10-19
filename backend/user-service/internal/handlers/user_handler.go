@@ -95,6 +95,10 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 
 // ListUsers handles requests to list users with pagination
 func (h *UserHandler) ListUsers(c *gin.Context) {
+	if !h.requireAdmin(c) {
+		return
+	}
+
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "10")
 
@@ -148,8 +152,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 
 	if id != authID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
+		if !h.requireAdmin(c) {
+			return
+		}
 	}
 
 	var req models.UpdateUserRequest
@@ -161,6 +166,27 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	if req.Role != "customer" && req.Role != "admin" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be customer or admin"})
+		return
+	}
+
+	if id == authID {
+		user, err := h.userService.GetUserByID(authID)
+		if err != nil || user == nil {
+			h.logger.Error("Failed to verify user role",
+				zap.String("user_id", authID),
+				zap.Error(err),
+				zap.String("client_ip", c.ClientIP()),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user permissions"})
+			return
+		}
+		if req.Role != user.Role && user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 	}
 
 	h.logger.Info("Updating user",
@@ -200,8 +226,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	if id != authID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
+		if !h.requireAdmin(c) {
+			return
+		}
 	}
 
 	h.logger.Info("Deleting user",
@@ -225,4 +252,29 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		zap.String("client_ip", c.ClientIP()),
 	)
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
+
+func (h *UserHandler) requireAdmin(c *gin.Context) bool {
+	authUserID, ok := c.Get(middleware.ContextUserIDKey)
+	authID, validID := authUserID.(string)
+	if !ok || !validID || authID == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return false
+	}
+
+	user, err := h.userService.GetUserByID(authID)
+	if err != nil || user == nil {
+		h.logger.Error("Failed to verify user role",
+			zap.String("user_id", authID),
+			zap.Error(err),
+			zap.String("client_ip", c.ClientIP()),
+		)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user permissions"})
+		return false
+	}
+	if user.Role != "admin" {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return false
+	}
+	return true
 }
