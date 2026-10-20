@@ -106,6 +106,9 @@ export class DashboardComponent implements OnInit {
   }
 
   startEditingUser(user: UserProfile): void {
+    if (!this.isAdmin) {
+      return;
+    }
     this.confirmingDeleteUserId = null;
     this.editingUserId = user.id;
     this.userForm.reset({
@@ -120,7 +123,7 @@ export class DashboardComponent implements OnInit {
   }
 
   saveUser(user: UserProfile): void {
-    if (this.savingUserId) {
+    if (!this.isAdmin || this.savingUserId) {
       return;
     }
     if (this.userForm.invalid) {
@@ -154,6 +157,9 @@ export class DashboardComponent implements OnInit {
   }
 
   requestUserDeletion(userId: string): void {
+    if (!this.isAdmin) {
+      return;
+    }
     this.editingUserId = null;
     this.confirmingDeleteUserId = userId;
   }
@@ -163,7 +169,7 @@ export class DashboardComponent implements OnInit {
   }
 
   deleteUser(user: UserProfile): void {
-    if (this.deletingUserId) {
+    if (!this.isAdmin || this.deletingUserId) {
       return;
     }
 

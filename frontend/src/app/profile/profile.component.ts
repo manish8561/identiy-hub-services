@@ -129,6 +129,9 @@ export class ProfileComponent implements OnInit {
   }
 
   requestAccountDeletion(): void {
+    if (this.user?.role !== 'admin') {
+      return;
+    }
     this.confirmingAccountDeletion = true;
   }
 
@@ -137,7 +140,7 @@ export class ProfileComponent implements OnInit {
   }
 
   deleteAccount(): void {
-    if (!this.user || this.deletingAccount) {
+    if (this.user?.role !== 'admin' || this.deletingAccount) {
       return;
     }
 

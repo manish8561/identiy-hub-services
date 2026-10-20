@@ -214,8 +214,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 // DeleteUser handles requests to delete a user
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	authUserID, _ := c.Get(middleware.ContextUserIDKey)
-	authID, _ := authUserID.(string)
 	id := c.Param("id")
 	if id == "" {
 		h.logger.Error("Missing user ID in delete request",
@@ -225,10 +223,8 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if id != authID {
-		if !h.requireAdmin(c) {
-			return
-		}
+	if !h.requireAdmin(c) {
+		return
 	}
 
 	h.logger.Info("Deleting user",

@@ -32,6 +32,11 @@ describe('ProfileComponent', () => {
   const router = { navigate: jasmine.createSpy().and.returnValue(Promise.resolve(true)) };
 
   beforeEach(async () => {
+    userService.deleteProfile.calls.reset();
+    authService.logout.calls.reset();
+    authService.clearSession.calls.reset();
+    router.navigate.calls.reset();
+
     await TestBed.configureTestingModule({
       imports: [ProfileComponent],
       providers: [
@@ -82,7 +87,17 @@ describe('ProfileComponent', () => {
     expect(component.editingProfile).toBeFalse();
   });
 
-  it('deletes the account, logs out, and navigates to login', () => {
+  it('does not expose account deletion to a non-admin', () => {
+    expect(fixture.nativeElement.textContent).not.toContain('Delete account');
+
+    component.deleteAccount();
+
+    expect(userService.deleteProfile).not.toHaveBeenCalled();
+    expect(authService.logout).not.toHaveBeenCalled();
+  });
+
+  it('allows an admin to delete their account and logs out', () => {
+    component.user = { ...profile, role: 'admin' };
     component.deleteAccount();
 
     expect(userService.deleteProfile).toHaveBeenCalledWith('user-1');

@@ -27,7 +27,7 @@ The application has been decomposed into the following microservices:
   - `GET /api/users/profile/:id` - Get user profile by ID (must match session user)
   - `GET /api/users/list` - List customer users (paginated; admin role required)
   - `PUT /api/users/profile/:id` - Update own profile, or any user as an admin
-  - `DELETE /api/users/profile/:id` - Delete own profile, or any user as an admin
+  - `DELETE /api/users/profile/:id` - Delete a user (admin role required)
 
 Admin accounts must be provisioned through a trusted operational process; users cannot grant themselves the `admin` role through profile updates. Keep the `role` synchronized for the account in both `auth_db.auth_users` and `user_db.user_profiles`. User list and update responses omit password fields.
 

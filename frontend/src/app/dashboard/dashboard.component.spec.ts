@@ -108,6 +108,16 @@ describe('DashboardComponent', () => {
     );
   });
 
+  it('does not allow a non-admin to initiate user deletion', () => {
+    component.isAdmin = false;
+
+    component.requestUserDeletion(listedUser.id);
+    component.deleteUser(listedUser);
+
+    expect(component.confirmingDeleteUserId).toBeNull();
+    expect(userService.deleteProfile).not.toHaveBeenCalled();
+  });
+
   it('does not load the admin user list for a customer', () => {
     authService.getProfile.and.returnValue(
       of({ ...profile, role: 'customer' }),

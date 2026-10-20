@@ -183,6 +183,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	mockUserService := new(MockUserService)
 	r := setupTestRouter(mockUserService)
 
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
 	mockUserService.On("DeleteUser", "123").Return(nil)
 
 	req, _ := http.NewRequest("DELETE", "/api/users/profile/123", nil)
@@ -326,6 +327,20 @@ func TestDeleteUser_RejectsNonAdminDeletingAnotherUser(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users/profile/other-user", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "DeleteUser", mock.Anything)
+}
+
+func TestDeleteUser_RejectsNonAdminDeletingOwnAccount(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "customer"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users/profile/123", nil))
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 	assert.JSONEq(t, `{"error":"forbidden"}`, w.Body.String())
