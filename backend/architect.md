@@ -130,6 +130,7 @@ flowchart LR
 
 - `auth-service` owns `auth_db` authentication data.
 - `user-service` owns `user_db` profile data.
+- [x] Documented the relationship: each `user_profiles` document corresponds to an `auth_users` document by the same user ID (`_id`). They are separate collections with no database-level foreign key; Kafka lifecycle events asynchronously create, update, and delete the profile.
 - `notification-service` owns `notification_db` preferences and delivery history.
 - The API gateway is the single entry point for frontend traffic.
 - Cookie-based auth is used for browser sessions, and token validation also supports bearer-token fallback in some flows.
