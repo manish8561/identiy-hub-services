@@ -6,7 +6,6 @@ import (
 	nethttp "net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -101,20 +100,17 @@ func writeRateLimitResponse(w nethttp.ResponseWriter, rps float64) {
 	_, _ = w.Write([]byte("rate limit exceeded"))
 }
 
-// clientIP extracts the first forwarded client IP, falling back to the peer address.
+// clientIP uses the direct connection peer; forwarded headers are caller-controlled.
 func clientIP(r *nethttp.Request) string {
-	for _, forwarded := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-		if ip := strings.TrimSpace(forwarded); ip != "" {
-			return ip
-		}
-	}
-	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
-		return ip
-	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+func setForwardedClientIP(req *nethttp.Request, ip string) {
+	req.Header.Del("X-Real-IP")
+	req.Header.Set("X-Forwarded-For", ip)
 }
 
 // RegisterHealthEndpoints registers health check endpoints
@@ -131,7 +127,8 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
+		setForwardedClientIP(req, clientIP(r))
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
@@ -152,7 +149,8 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
+		setForwardedClientIP(req, clientIP(r))
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
@@ -173,7 +171,8 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
+		setForwardedClientIP(req, clientIP(r))
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)

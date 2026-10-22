@@ -18,6 +18,7 @@ func NewRouter(authHandler *handlers.AuthHandler, log logger.Logger, allowedOrig
 	r.Use(middleware.ZapMiddleware(log))
 
 	api := r.Group("/api/auth")
+	api.Use(middleware.RateLimit())
 	{
 		api.POST("/login", authHandler.Login)
 		api.POST("/register", authHandler.Register)

@@ -61,20 +61,22 @@ func TestRateLimiter_ZeroRateLimit(t *testing.T) {
 	}
 }
 
-func TestClientIP_XForwardedFor(t *testing.T) {
+func TestClientIP_IgnoresXForwardedFor(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.0.2.3:1234"
 	req.Header.Set("X-Forwarded-For", "10.0.0.1, 10.0.0.2")
 
 	ip := clientIP(req)
-	assert.Equal(t, "10.0.0.1", ip)
+	assert.Equal(t, "192.0.2.3", ip)
 }
 
-func TestClientIP_XRealIP(t *testing.T) {
+func TestClientIP_IgnoresXRealIP(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.0.2.4:1234"
 	req.Header.Set("X-Real-IP", "10.0.0.1")
 
 	ip := clientIP(req)
-	assert.Equal(t, "10.0.0.1", ip)
+	assert.Equal(t, "192.0.2.4", ip)
 }
 
 func TestClientIP_RemoteAddr(t *testing.T) {
@@ -92,6 +94,17 @@ func TestClientIP_UsesRemoteAddrWhenHeadersMissing(t *testing.T) {
 	req.Header.Del("X-Real-IP")
 
 	assert.Equal(t, "10.0.0.7", clientIP(req))
+}
+
+func TestSetForwardedClientIPReplacesCallerHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Forwarded-For", "198.51.100.1")
+	req.Header.Set("X-Real-IP", "198.51.100.2")
+
+	setForwardedClientIP(req, "192.0.2.5")
+
+	assert.Equal(t, "192.0.2.5", req.Header.Get("X-Forwarded-For"))
+	assert.Empty(t, req.Header.Get("X-Real-IP"))
 }
 
 func TestWriteRateLimitResponse(t *testing.T) {

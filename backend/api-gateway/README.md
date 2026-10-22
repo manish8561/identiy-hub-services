@@ -119,6 +119,10 @@ SERVICE_VERSION=v1.0.0
 Requests over the configured limit receive `429 Too Many Requests`, a
 `Retry-After` header, and the response body `rate limit exceeded`. The limiter
 is held in gateway memory, so each gateway replica has its own limit.
+The gateway keys requests by the direct connection peer and replaces any
+caller-supplied forwarding headers before proxying. If deployed behind a load
+balancer or reverse proxy, configure a trusted-proxy-aware client IP policy
+before relying on per-end-user limits.
 
 All gateway health forwards and API proxy requests use a shared HTTP client
 with a 10-second total upstream request timeout. The incoming request context

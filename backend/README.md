@@ -74,6 +74,8 @@ Sessions use an **HttpOnly cookie** named `access_token` containing a JWT. The b
 
 Both auth-service and user-service must share the same `JWT_SECRET`. CORS is configured with explicit origins and `Access-Control-Allow-Credentials: true` (wildcard `*` is not used with cookies).
 
+Auth, user, and notification services also enforce a per-client-IP token bucket on their API routes, independently of the API Gateway. Each service allows 10 requests per second with a burst of 20 per process; excess requests receive HTTP 429 with a `Retry-After` header. Limits are in-memory and therefore apply separately to each service replica. The middleware uses the first address in `X-Forwarded-For` (then `X-Real-IP`, then the connection peer); only trusted proxies should be allowed to supply those headers.
+
 ## Directory Structure
 
 ```

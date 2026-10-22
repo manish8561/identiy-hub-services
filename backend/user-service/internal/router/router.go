@@ -18,6 +18,7 @@ func NewRouter(userHandler *handlers.UserHandler, log logger.Logger, jwtSecret s
 	r.Use(middleware.ZapMiddleware(log))
 
 	api := r.Group("/api/users")
+	api.Use(middleware.RateLimit())
 	api.Use(middleware.CookieAuth(jwtSecret))
 	{
 		api.GET("/me", userHandler.GetCurrentUser)

@@ -160,7 +160,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 2. **Integration and contract tests** — Unit tests exist for core packages; add end-to-end coverage for auth → Kafka → user/notification sync and API contracts.
 3. **CI pipelines** — Makefile and git hooks exist locally; add CI (e.g. GitHub Actions) for format, lint, test, build, and image validation.
 4. **Wire frontend to user APIs** — Backend already exposes list/update/delete; `UserService.listUsers` / `updateProfile` are largely unused, profile is mostly read-only, and the dashboard still uses placeholder stats. Add list/edit/delete UI and remove fake metrics.
-5. **Service-level rate limiting** — API Gateway has per-IP token-bucket limiting; add middleware on auth, user, and notification services for defense in depth.
+5. ~~**Service-level rate limiting**~~ — ✅ Done: Auth, User, and Notification services enforce per-IP token-bucket limits (10 requests/second, burst of 20) on API routes for defense in depth.
 
 ### P1 — Observability
 
@@ -178,7 +178,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 ### P2 — Cleanup and documentation
 
 1. **Remove Kratos greeter / helloworld scaffold** from the API Gateway (HTTP `/helloworld/{name}`, related proto/biz/data/service code) so production surface matches real APIs only.
-2. **Refresh docs** — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway rate limiting and router modules are done; service-level rate limiting is not).
+2. **Refresh docs** — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
 3. **Compose healthchecks** — Replace one-shot / very long `interval` healthchecks with continuous checks suitable for ops.
 4. **Auth / user product gaps** — Password change, roles UX, and richer account lifecycle beyond the current cookie session flows.
 
@@ -192,6 +192,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 - MongoDB per-service databases and Kafka user lifecycle sync
 - Zap structured logging, Swagger/OpenAPI on the gateway
 - Gateway rate limiting and dedicated router modules
+- Per-IP token-bucket rate limiting in Auth, User, and Notification services
 - Notification preferences + delivery history (email path)
 - Local / prod / test Docker Compose and `deploy.sh`
 - Local `make` lint / test / security tooling and unit tests for core packages

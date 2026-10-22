@@ -28,7 +28,7 @@ func New(handler *handlers.NotificationHandler, secret string, origins []string)
 		}
 		c.Next()
 	})
-	api := r.Group("/api/notifications", middleware.CookieAuth(secret))
+	api := r.Group("/api/notifications", middleware.RateLimit(), middleware.CookieAuth(secret))
 	api.GET("/preferences", handler.GetPreference)
 	api.PUT("/preferences", handler.UpdatePreference)
 	api.GET("/history", handler.History)

@@ -91,3 +91,21 @@ func TestNewRouter_AppliesLoggingMiddleware(t *testing.T) {
 	// If logging middleware is applied, the request should be processed
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestNewRouter_RateLimitsAuthAPIByClientIP(t *testing.T) {
+	router := setupTestRouter()
+
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.RemoteAddr = "192.0.2.1:1234"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+}
