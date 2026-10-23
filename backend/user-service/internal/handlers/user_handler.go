@@ -226,13 +226,27 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	if !h.requireAdmin(c) {
 		return
 	}
+	targetUser, err := h.userService.GetUserByID(id)
+	if err != nil || targetUser == nil {
+		h.logger.Warn("Failed to verify delete target",
+			zap.String("user_id", id),
+			zap.Error(err),
+			zap.String("client_ip", c.ClientIP()),
+		)
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if targetUser.Role == "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin users cannot be deleted"})
+		return
+	}
 
 	h.logger.Info("Deleting user",
 		zap.String("user_id", id),
 		zap.String("client_ip", c.ClientIP()),
 	)
 
-	err := h.userService.DeleteUser(id)
+	err = h.userService.DeleteUser(id)
 	if err != nil {
 		h.logger.Warn("Failed to delete user",
 			zap.String("user_id", id),

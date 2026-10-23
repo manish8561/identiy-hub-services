@@ -179,20 +179,21 @@ func TestUpdateUser_Success(t *testing.T) {
 	mockUserService.AssertExpectations(t)
 }
 
-func TestDeleteUser_Success(t *testing.T) {
+func TestDeleteUser_RejectsDeletingAdminSelf(t *testing.T) {
 	mockUserService := new(MockUserService)
 	r := setupTestRouter(mockUserService)
 
 	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
-	mockUserService.On("DeleteUser", "123").Return(nil)
 
 	req, _ := http.NewRequest("DELETE", "/api/users/profile/123", nil)
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"admin users cannot be deleted"}`, w.Body.String())
 	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "DeleteUser", mock.Anything)
 }
 
 func TestListUsers_Success(t *testing.T) {
@@ -409,6 +410,7 @@ func TestDeleteUser_AdminCanDeleteAnotherUser(t *testing.T) {
 	mockUserService := new(MockUserService)
 	r := setupTestRouter(mockUserService)
 	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
+	mockUserService.On("GetUserByID", "other-user").Return(&models.User{ID: "other-user", Role: "customer"}, nil)
 	mockUserService.On("DeleteUser", "other-user").Return(nil)
 
 	w := httptest.NewRecorder()
@@ -416,4 +418,19 @@ func TestDeleteUser_AdminCanDeleteAnotherUser(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	mockUserService.AssertExpectations(t)
+}
+
+func TestDeleteUser_RejectsDeletingAnotherAdmin(t *testing.T) {
+	mockUserService := new(MockUserService)
+	r := setupTestRouter(mockUserService)
+	mockUserService.On("GetUserByID", "123").Return(&models.User{ID: "123", Role: "admin"}, nil)
+	mockUserService.On("GetUserByID", "other-admin").Return(&models.User{ID: "other-admin", Role: "admin"}, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/api/users/profile/other-admin", nil))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"admin users cannot be deleted"}`, w.Body.String())
+	mockUserService.AssertExpectations(t)
+	mockUserService.AssertNotCalled(t, "DeleteUser", mock.Anything)
 }

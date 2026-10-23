@@ -159,7 +159,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 1. **Kafka DLQ + bounded retries / backoff** — Failed consumers can redeliver forever or drop bad events; registration can succeed even when Kafka publish fails. Add dead-letter topics, retry limits, and durable reconciliation where needed.
 2. **Integration and contract tests** — Unit tests exist for core packages; add end-to-end coverage for auth → Kafka → user/notification sync and API contracts.
 3. **CI pipelines** — Makefile and git hooks exist locally; add CI (e.g. GitHub Actions) for format, lint, test, build, and image validation.
-4. **Wire frontend to user APIs** — Backend already exposes list/update/delete; `UserService.listUsers` / `updateProfile` are largely unused, profile is mostly read-only, and the dashboard still uses placeholder stats. Add list/edit/delete UI and remove fake metrics.
+4. ~~**Wire frontend to user APIs**~~ — ✅ Done: the admin dashboard lists paginated users with edit/delete actions, profile details can be updated, and placeholder dashboard metrics have been removed.
 5. ~~**Service-level rate limiting**~~ — ✅ Done: Auth, User, and Notification services enforce per-IP token-bucket limits (10 requests/second, burst of 20) on API routes for defense in depth.
 
 ### P1 — Observability

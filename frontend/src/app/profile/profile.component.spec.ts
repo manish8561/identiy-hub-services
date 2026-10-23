@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { Router } from '@angular/router';
 
 import { ProfileComponent } from './profile.component';
 import { AuthService } from '../services/auth.service';
@@ -22,30 +21,25 @@ describe('ProfileComponent', () => {
   const authService = {
     getProfile: () => of(profile),
     invalidateProfileCache: jasmine.createSpy(),
-    logout: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
-    clearSession: jasmine.createSpy(),
   };
   const userService = {
     updateProfile: jasmine.createSpy().and.returnValue(of(profile)),
-    deleteProfile: jasmine.createSpy().and.returnValue(of({ message: 'deleted' })),
   };
-  const router = { navigate: jasmine.createSpy().and.returnValue(Promise.resolve(true)) };
-
   beforeEach(async () => {
-    userService.deleteProfile.calls.reset();
-    authService.logout.calls.reset();
-    authService.clearSession.calls.reset();
-    router.navigate.calls.reset();
+    authService.invalidateProfileCache.calls.reset();
+    userService.updateProfile.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent],
       providers: [
         { provide: AuthService, useValue: authService },
         { provide: UserService, useValue: userService },
-        { provide: Router, useValue: router },
         {
           provide: ToastService,
-          useValue: { error: jasmine.createSpy(), success: jasmine.createSpy() },
+          useValue: {
+            error: jasmine.createSpy(),
+            success: jasmine.createSpy(),
+          },
         },
         {
           provide: NotificationService,
@@ -87,22 +81,16 @@ describe('ProfileComponent', () => {
     expect(component.editingProfile).toBeFalse();
   });
 
-  it('does not expose account deletion to a non-admin', () => {
-    expect(fixture.nativeElement.textContent).not.toContain('Delete account');
-
-    component.deleteAccount();
-
-    expect(userService.deleteProfile).not.toHaveBeenCalled();
-    expect(authService.logout).not.toHaveBeenCalled();
-  });
-
-  it('allows an admin to delete their account and logs out', () => {
+  it('does not expose account deletion to an admin', () => {
     component.user = { ...profile, role: 'admin' };
-    component.deleteAccount();
+    fixture.detectChanges();
 
-    expect(userService.deleteProfile).toHaveBeenCalledWith('user-1');
-    expect(authService.logout).toHaveBeenCalled();
-    expect(authService.clearSession).toHaveBeenCalled();
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    const deleteButtons = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ).filter((button: HTMLButtonElement) =>
+      /delete/i.test(button.textContent ?? ''),
+    );
+
+    expect(deleteButtons.length).toBe(0);
   });
 });

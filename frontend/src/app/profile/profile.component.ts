@@ -1,5 +1,4 @@
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import {
   FormBuilder,
@@ -33,8 +32,6 @@ export class ProfileComponent implements OnInit {
   savingPreference = false;
   editingProfile = false;
   savingProfile = false;
-  confirmingAccountDeletion = false;
-  deletingAccount = false;
 
   get historyPageCount(): number {
     return this.history ? Math.ceil(this.history.total / this.history.size) : 0;
@@ -46,12 +43,15 @@ export class ProfileComponent implements OnInit {
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly toastService: ToastService,
-    private readonly router: Router,
   ) {
     this.profileForm = this.formBuilder.group({
       name: [
         '',
-        [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)],
+        [
+          Validators.required,
+          Validators.maxLength(100),
+          Validators.pattern(/\S/),
+        ],
       ],
       email: ['', [Validators.required, Validators.email]],
     });
@@ -126,48 +126,6 @@ export class ProfileComponent implements OnInit {
           );
         },
       });
-  }
-
-  requestAccountDeletion(): void {
-    if (this.user?.role !== 'admin') {
-      return;
-    }
-    this.confirmingAccountDeletion = true;
-  }
-
-  cancelAccountDeletion(): void {
-    this.confirmingAccountDeletion = false;
-  }
-
-  deleteAccount(): void {
-    if (this.user?.role !== 'admin' || this.deletingAccount) {
-      return;
-    }
-
-    this.deletingAccount = true;
-    this.userService.deleteProfile(this.user.id).subscribe({
-      next: () => {
-        this.authService.logout().subscribe({
-          next: () => this.finishAccountDeletion(),
-          error: () => this.finishAccountDeletion(),
-        });
-      },
-      error: (error: unknown) => {
-        this.deletingAccount = false;
-        this.confirmingAccountDeletion = false;
-        this.toastService.error(
-          error instanceof Error
-            ? error.message
-            : 'Could not delete your account. Please try again.',
-        );
-      },
-    });
-  }
-
-  private finishAccountDeletion(): void {
-    this.authService.clearSession();
-    this.toastService.success('Your account has been deleted.');
-    this.router.navigate(['/login']);
   }
 
   loadNotifications(page = 1): void {
