@@ -85,9 +85,10 @@ describe('ProfileComponent', () => {
     component.user = { ...profile, role: 'admin' };
     fixture.detectChanges();
 
-    const deleteButtons = Array.from(
-      fixture.nativeElement.querySelectorAll('button'),
-    ).filter((button: HTMLButtonElement) =>
+    const buttons = fixture.nativeElement.querySelectorAll(
+      'button',
+    ) as NodeListOf<HTMLButtonElement>;
+    const deleteButtons = Array.from(buttons).filter((button) =>
       /delete/i.test(button.textContent ?? ''),
     );
 
