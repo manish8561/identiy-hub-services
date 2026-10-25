@@ -177,7 +177,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P2 — Cleanup and documentation
 
-1. **Remove Kratos greeter / helloworld scaffold** from the API Gateway (HTTP `/helloworld/{name}`, related proto/biz/data/service code) so production surface matches real APIs only.
+1. ~~**Remove Kratos greeter / helloworld scaffold** from the API Gateway~~ — ✅ Done: removed the unused HTTP/gRPC greeter, generated proto code, and scaffold biz/data/service packages; the gateway now exposes only its HTTP health, Swagger, and proxy routes.
 2. **Refresh docs** — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
 3. **Compose healthchecks** — Replace one-shot / very long `interval` healthchecks with continuous checks suitable for ops.
 4. **Auth / user product gaps** — Password change, roles UX, and richer account lifecycle beyond the current cookie session flows.
