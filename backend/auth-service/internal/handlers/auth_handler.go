@@ -5,6 +5,7 @@ import (
 	"auth-service/internal/logger"
 	"auth-service/internal/models"
 	"auth-service/internal/services"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -52,7 +53,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			zap.Error(err),
 			zap.String("client_ip", c.ClientIP()),
 		)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		status := http.StatusUnauthorized
+		if isSessionStoreError(err) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -90,7 +95,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			zap.Error(err),
 			zap.String("client_ip", c.ClientIP()),
 		)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status := http.StatusBadRequest
+		if isSessionStoreError(err) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -151,7 +160,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			zap.Error(err),
 			zap.String("client_ip", c.ClientIP()),
 		)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		status := http.StatusUnauthorized
+		if isSessionStoreError(err) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -173,7 +186,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	response, err := h.authService.ValidateToken(token)
-	if err != nil || !response.Valid {
+	if err != nil {
+		h.logger.Error("Failed to validate current session", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate session"})
+		return
+	}
+	if !response.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -193,7 +211,12 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	response, err := h.authService.ValidateToken(token)
-	if err != nil || !response.Valid {
+	if err != nil {
+		h.logger.Error("Failed to validate account deletion session", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate session"})
+		return
+	}
+	if !response.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -211,10 +234,24 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "account deleted"})
 }
 
-// Logout clears the access token cookie.
+// Logout revokes the current server-side session and clears the access token cookie.
 func (h *AuthHandler) Logout(c *gin.Context) {
+	if err := h.authService.Logout(h.extractToken(c)); err != nil {
+		h.logger.Error("Failed to revoke logout session",
+			zap.Error(err),
+			zap.String("client_ip", c.ClientIP()),
+		)
+		h.clearAccessTokenCookie(c)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to log out"})
+		return
+	}
 	h.clearAccessTokenCookie(c)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "logged out"})
+}
+
+func isSessionStoreError(err error) bool {
+	var sessionErr *services.SessionStoreError
+	return errors.As(err, &sessionErr)
 }
 
 func (h *AuthHandler) extractToken(c *gin.Context) string {

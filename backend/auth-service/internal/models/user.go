@@ -14,6 +14,15 @@ type User struct {
 	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
+// UserSession represents one issued authentication cookie without storing its bearer token.
+type UserSession struct {
+	ID        string     `json:"id" bson:"_id"`
+	UserID    string     `json:"user_id" bson:"userId"`
+	CreatedAt time.Time  `json:"created_at" bson:"createdAt"`
+	ExpiresAt time.Time  `json:"expires_at" bson:"expiresAt"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty" bson:"revokedAt,omitempty"`
+}
+
 // LoginRequest represents a login request
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`

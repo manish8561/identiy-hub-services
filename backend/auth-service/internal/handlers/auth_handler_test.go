@@ -2,10 +2,13 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"auth-service/internal/config"
 	"auth-service/internal/handlers"
@@ -23,11 +26,47 @@ func setupAuthRouter(t *testing.T) (*gin.Engine, *config.CookieConfig, *services
 	gin.SetMode(gin.TestMode)
 	cookieConfig := config.NewCookieConfig(false, 3600, "lax", "")
 	jwtService := services.NewJWTService(config.NewJWTConfig("test-secret"))
-	authService := services.NewAuthService(nil, jwtService, nil)
+	authService := services.NewAuthServiceWithSessionStore(nil, jwtService, nil, acceptingSessionStore{})
 	handler := handlers.NewAuthHandler(authService, zap.NewNop(), cookieConfig)
 
 	r := authrouter.NewRouter(handler, zap.NewNop(), []string{"http://localhost:3000"})
 	return r, cookieConfig, jwtService
+}
+
+type acceptingSessionStore struct{}
+
+func (acceptingSessionStore) Create(context.Context, models.UserSession) error {
+	return nil
+}
+
+func (acceptingSessionStore) IsActive(_ context.Context, sessionID, userID string, _ time.Time) (bool, error) {
+	return sessionID != "" && userID != "", nil
+}
+
+func (acceptingSessionStore) Revoke(context.Context, string, string, time.Time) error {
+	return nil
+}
+
+func (acceptingSessionStore) RevokeAll(context.Context, string, time.Time) error {
+	return nil
+}
+
+type failingSessionStore struct{}
+
+func (failingSessionStore) Create(context.Context, models.UserSession) error {
+	return errors.New("database unavailable")
+}
+
+func (failingSessionStore) IsActive(context.Context, string, string, time.Time) (bool, error) {
+	return false, errors.New("database unavailable")
+}
+
+func (failingSessionStore) Revoke(context.Context, string, string, time.Time) error {
+	return errors.New("database unavailable")
+}
+
+func (failingSessionStore) RevokeAll(context.Context, string, time.Time) error {
+	return errors.New("database unavailable")
 }
 
 func TestAuthHandlerRejectsMalformedCredentials(t *testing.T) {
@@ -138,6 +177,24 @@ func TestAuthHandlerMeRejectsMissingOrInvalidToken(t *testing.T) {
 			assert.Equal(t, http.StatusUnauthorized, response.Code)
 		})
 	}
+}
+
+func TestAuthHandlerMeReturnsServerErrorWhenSessionLookupFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cookieConfig := config.NewCookieConfig(false, 3600, "lax", "")
+	jwtService := services.NewJWTService(config.NewJWTConfig("test-secret"))
+	authService := services.NewAuthServiceWithSessionStore(nil, jwtService, nil, failingSessionStore{})
+	handler := handlers.NewAuthHandler(authService, zap.NewNop(), cookieConfig)
+	r := authrouter.NewRouter(handler, zap.NewNop(), []string{"http://localhost:3000"})
+	token, err := jwtService.GenerateToken("user-123")
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: cookieConfig.Name, Value: token})
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, req)
+
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
 }
 
 func TestAuthHandlerDeleteAccountRejectsMissingOrInvalidToken(t *testing.T) {

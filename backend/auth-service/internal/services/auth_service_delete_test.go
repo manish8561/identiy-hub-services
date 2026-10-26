@@ -26,6 +26,7 @@ func TestDeleteAccountPublishesDeletionAndCanRetryAfterPublishFailure(t *testing
 
 	mt.Run("retry publishes deletion event", func(mt *mtest.T) {
 		mt.AddMockResponses(
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 0}, {Key: "nModified", Value: 0}},
 			bson.D{
 				{Key: "ok", Value: 1},
 				{Key: "value", Value: bson.D{
@@ -36,6 +37,7 @@ func TestDeleteAccountPublishesDeletionAndCanRetryAfterPublishFailure(t *testing
 					{Key: "role", Value: "customer"},
 				}},
 			},
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 0}, {Key: "nModified", Value: 0}},
 			bson.D{{Key: "ok", Value: 1}, {Key: "value", Value: nil}},
 		)
 

@@ -20,7 +20,7 @@ flowchart LR
     end
 
     subgraph Data[Data Stores]
-        AUTHDB[(MongoDB\nauth_db)]
+        AUTHDB[(MongoDB\nauth_db\n auth_users + user_sessions)]
         USERDB[(MongoDB\nuser_db)]
         NOTIFYDB[(MongoDB\nnotification_db)]
     end
@@ -35,7 +35,7 @@ flowchart LR
     GW -->|/api/users/*| US
     GW -->|/api/notifications/*| NS
 
-    AS -->|Create / validate / refresh user session| AUTHDB
+    AS -->|Create / validate / revoke user_sessions| AUTHDB
     AS -->|Publish user.created.v1| KAFKA
     AS -->|Publish user.updated.v1| KAFKA
     AS -->|Publish user.deleted.v1| KAFKA
@@ -67,6 +67,7 @@ sequenceDiagram
     Gateway->>AuthService: Forward login request
     AuthService->>MongoDB: Validate email and password
     MongoDB-->>AuthService: User record
+    AuthService->>MongoDB: Insert user_sessions record for JWT jti
     AuthService-->>Gateway: Success + JWT
     AuthService-->>Frontend: Set HttpOnly access_token cookie
     Frontend-->>User: Authenticated session
@@ -115,7 +116,8 @@ flowchart TD
 
 - Handles registration, login, logout, and refresh
 - Validates credentials against MongoDB
-- Creates and validates JWTs
+- Creates JWTs backed by revocable `user_sessions` records
+- Validates session activity and revokes sessions on logout, refresh, and account deletion
 - Emits user lifecycle events to Kafka
 
 ### User Service
@@ -134,13 +136,14 @@ flowchart TD
 ## Data model
 
 - `auth_db.auth_users`: authentication records
+- `auth_db.user_sessions`: one revocable session record per issued cookie; stores session metadata, not the JWT
 - `user_db.user_profiles`: synced profile data
 - `notification_db.notification_preferences`: per-user email preference
 - `notification_db.notification_records`: delivery history and outcomes
 
 ## Operational notes
 
-- Browser sessions use HttpOnly cookies; no token is stored in localStorage
+- Browser sessions use HttpOnly cookies; no token is stored in localStorage. Each cookie maps to an active `auth_db.user_sessions` record until logout, refresh, account deletion, or expiration.
 - Kafka keeps the services loosely coupled and resilient to async propagation
 - The gateway acts as the single public interface for client traffic
 - The backend supports both local containerized runs and production deployment via Docker Compose and the `deploy.sh` helper
@@ -178,11 +181,11 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 ### P2 — Cleanup and documentation
 
 1. ~~**Remove Kratos greeter / helloworld scaffold** from the API Gateway~~ — ✅ Done: removed the unused HTTP/gRPC greeter, generated proto code, and scaffold biz/data/service packages; the gateway now exposes only its HTTP health, Swagger, and proxy routes.
-2. **Refresh docs** — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
+2. ~~**Refresh docs**~~ — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
 3. **Compose healthchecks** — Replace one-shot / very long `interval` healthchecks with continuous checks suitable for ops.
 4. **Auth / user product gaps** — Password change, roles UX, and richer account lifecycle beyond the current cookie session flows.
 
-5. Implmentation of user sessions collection in the backend for each cookie we keep.
+5. ~~**User sessions collection**~~ — ✅ Done: `auth_db.user_sessions` records each issued cookie by JWT session ID, validates active sessions, revokes sessions on logout/refresh/account deletion, and expires old records through a MongoDB TTL index.
 
 ### Already in place (do not re-plan as greenfield)
 

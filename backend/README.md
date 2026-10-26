@@ -14,7 +14,7 @@ The application has been decomposed into the following microservices:
   - `POST /api/auth/login` - User login (sets `access_token` cookie)
   - `POST /api/auth/register` - User registration (sets `access_token` cookie)
   - `GET /api/auth/me` - Get current session user ID from cookie
-  - `POST /api/auth/logout` - Clear session cookie
+  - `POST /api/auth/logout` - Revoke the current server-side session and clear its cookie
   - `POST /api/auth/validate` - Token validation (cookie, body, or Bearer)
   - `POST /api/auth/refresh` - Refresh session (sets new cookie)
 
@@ -56,12 +56,14 @@ Admin accounts must be provisioned through a trusted operational process; users 
 ### 5. Shared Database
 
 - **MongoDB**: Database-per-service model
-- **Collections**: `auth_db.auth_users` (auth-service), `user_db.user_profiles` (user-service, synced via Kafka)
+- **Collections**: `auth_db.auth_users` and `auth_db.user_sessions` (auth-service), `user_db.user_profiles` (user-service, synced via Kafka)
 - **Notification database**: `notification_db.notification_preferences` and `notification_db.notification_records`
 
 ## Authentication
 
 Sessions use an **HttpOnly cookie** named `access_token` containing a JWT. The browser sends this cookie automatically on subsequent requests; the frontend does not store tokens in `localStorage`.
+
+Each issued cookie has a corresponding `auth_db.user_sessions` document keyed by the JWT session ID (`jti`). Session documents store the user ID, creation and expiration times, and an optional revocation time; the bearer token itself is never persisted. Auth validation checks that the session is active. Logout and refresh revoke the replaced session, account deletion revokes all of the user's sessions, and MongoDB's TTL index removes expired session documents. Existing cookies issued before this change have no session ID and must sign in again after deployment.
 
 | Setting         | Env var            | Default                                       |
 | --------------- | ------------------ | --------------------------------------------- |

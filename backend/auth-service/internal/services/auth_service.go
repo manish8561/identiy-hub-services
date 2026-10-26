@@ -18,6 +18,7 @@ import (
 type AuthService struct {
 	mongoConfig *config.MongoDBConfig
 	jwtService  *JWTService
+	sessions    SessionStore
 	publisher   UserEventPublisher
 }
 
@@ -30,9 +31,15 @@ type UserEventPublisher interface {
 
 // NewAuthService creates a new AuthService with the provided dependencies
 func NewAuthService(mongoConfig *config.MongoDBConfig, jwtService *JWTService, publisher UserEventPublisher) *AuthService {
+	return NewAuthServiceWithSessionStore(mongoConfig, jwtService, publisher, NewMongoSessionStore(mongoConfig))
+}
+
+// NewAuthServiceWithSessionStore creates an AuthService with an explicit session store.
+func NewAuthServiceWithSessionStore(mongoConfig *config.MongoDBConfig, jwtService *JWTService, publisher UserEventPublisher, sessions SessionStore) *AuthService {
 	return &AuthService{
 		mongoConfig: mongoConfig,
 		jwtService:  jwtService,
+		sessions:    sessions,
 		publisher:   publisher,
 	}
 }
@@ -66,9 +73,9 @@ func (s *AuthService) Login(email, plainPassword string) (*models.LoginResponse,
 		}
 	}
 
-	token, err := s.jwtService.GenerateToken(user.ID)
+	token, err := s.createSession(ctx, user.ID)
 	if err != nil {
-		return nil, errors.New("failed to generate token")
+		return nil, fmt.Errorf("create login session: %w", err)
 	}
 
 	return &models.LoginResponse{
@@ -135,9 +142,9 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		}
 	}
 
-	token, err := s.jwtService.GenerateToken(newUser.ID)
+	token, err := s.createSession(ctx, newUser.ID)
 	if err != nil {
-		return nil, errors.New("failed to generate token")
+		return nil, fmt.Errorf("create registration session: %w", err)
 	}
 
 	return &models.RegisterResponse{
@@ -154,10 +161,17 @@ func (s *AuthService) DeleteAccount(userID string) error {
 	if s.publisher == nil {
 		return errors.New("publish deletion event: publisher is not configured")
 	}
+	if s.sessions == nil {
+		return errors.New("user session store is not configured")
+	}
 
 	collection := s.mongoConfig.GetCollection("auth_users")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	if err := s.sessions.RevokeAll(ctx, userID, time.Now()); err != nil {
+		return &SessionStoreError{Operation: "revoke account", Err: err}
+	}
 
 	var user models.User
 	err := collection.FindOneAndDelete(ctx, bson.M{"_id": userID}).Decode(&user)
@@ -186,12 +200,12 @@ func (s *AuthService) DeleteAccount(userID string) error {
 
 // ValidateToken validates a JWT token and returns user information
 func (s *AuthService) ValidateToken(tokenString string) (*models.TokenValidationResponse, error) {
-	claims, err := s.jwtService.ValidateToken(tokenString)
+	claims, active, err := s.validateActiveToken(tokenString)
 	if err != nil {
-		return &models.TokenValidationResponse{
-			Valid:   false,
-			Message: "Invalid token",
-		}, nil
+		return nil, err
+	}
+	if !active {
+		return &models.TokenValidationResponse{Valid: false, Message: "Invalid token"}, nil
 	}
 
 	return &models.TokenValidationResponse{
@@ -202,18 +216,84 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.TokenValidation
 
 // RefreshToken generates a new token for the user
 func (s *AuthService) RefreshToken(tokenString string) (*models.RefreshTokenResponse, error) {
-	claims, err := s.jwtService.ValidateToken(tokenString)
+	claims, active, err := s.validateActiveToken(tokenString)
 	if err != nil {
+		return nil, err
+	}
+	if !active {
 		return nil, errors.New("invalid token")
 	}
 
-	newToken, err := s.jwtService.GenerateToken(claims.UserID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	newToken, err := s.createSession(ctx, claims.UserID)
 	if err != nil {
-		return nil, errors.New("failed to generate new token")
+		return nil, fmt.Errorf("create refreshed session: %w", err)
+	}
+	if err := s.sessions.Revoke(ctx, claims.ID, claims.UserID, time.Now()); err != nil {
+		return nil, &SessionStoreError{Operation: "revoke refreshed", Err: err}
 	}
 
 	return &models.RefreshTokenResponse{
 		Status: "success",
 		Token:  newToken,
 	}, nil
+}
+
+// Logout revokes the session represented by tokenString. Invalid or missing tokens
+// are treated as already logged out so logout remains safe to retry.
+func (s *AuthService) Logout(tokenString string) error {
+	claims, err := s.jwtService.ValidateToken(tokenString)
+	if err != nil || claims.ID == "" {
+		return nil
+	}
+	if s.sessions == nil {
+		return &SessionStoreError{Operation: "logout", Err: errors.New("user session store is not configured")}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.sessions.Revoke(ctx, claims.ID, claims.UserID, time.Now()); err != nil {
+		return &SessionStoreError{Operation: "logout", Err: err}
+	}
+	return nil
+}
+
+func (s *AuthService) createSession(ctx context.Context, userID string) (string, error) {
+	if s.sessions == nil {
+		return "", &SessionStoreError{Operation: "create", Err: errors.New("user session store is not configured")}
+	}
+
+	token, sessionID, expiresAt, err := s.jwtService.GenerateTokenWithSession(userID)
+	if err != nil {
+		return "", err
+	}
+	if err := s.sessions.Create(ctx, models.UserSession{
+		ID:        sessionID,
+		UserID:    userID,
+		CreatedAt: time.Now(),
+		ExpiresAt: expiresAt,
+	}); err != nil {
+		return "", &SessionStoreError{Operation: "create", Err: err}
+	}
+	return token, nil
+}
+
+func (s *AuthService) validateActiveToken(tokenString string) (*Claims, bool, error) {
+	claims, err := s.jwtService.ValidateToken(tokenString)
+	if err != nil || claims.ID == "" {
+		return nil, false, nil
+	}
+	if s.sessions == nil {
+		return nil, false, &SessionStoreError{Operation: "validate", Err: errors.New("user session store is not configured")}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	active, err := s.sessions.IsActive(ctx, claims.ID, claims.UserID, time.Now())
+	if err != nil {
+		return nil, false, &SessionStoreError{Operation: "validate", Err: err}
+	}
+	return claims, active, nil
 }

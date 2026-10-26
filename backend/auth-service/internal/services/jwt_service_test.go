@@ -2,6 +2,8 @@ package services
 
 import (
 	"auth-service/internal/config"
+	"auth-service/internal/models"
+	"context"
 	"testing"
 	"time"
 
@@ -65,12 +67,22 @@ func TestJWTServiceValidateTokenRejectsInvalidTokens(t *testing.T) {
 
 func TestAuthServiceValidateToken(t *testing.T) {
 	jwtService := newTestJWTService()
-	authService := NewAuthService(nil, jwtService, nil)
+	sessions := newTestSessionStore()
 
 	validToken, err := jwtService.GenerateToken("user-456")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
+	claims, err := jwtService.ValidateToken(validToken)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+	if err := sessions.Create(t.Context(), models.UserSession{
+		ID: claims.ID, UserID: claims.UserID, CreatedAt: time.Now(), ExpiresAt: claims.ExpiresAt.Time,
+	}); err != nil {
+		t.Fatalf("Create() session error = %v", err)
+	}
+	authService := NewAuthServiceWithSessionStore(nil, jwtService, nil, sessions)
 
 	response, err := authService.ValidateToken(validToken)
 	if err != nil {
@@ -91,12 +103,22 @@ func TestAuthServiceValidateToken(t *testing.T) {
 
 func TestAuthServiceRefreshToken(t *testing.T) {
 	jwtService := newTestJWTService()
-	authService := NewAuthService(nil, jwtService, nil)
+	sessions := newTestSessionStore()
 
 	token, err := jwtService.GenerateToken("user-789")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
+	claims, err := jwtService.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+	if err := sessions.Create(t.Context(), models.UserSession{
+		ID: claims.ID, UserID: claims.UserID, CreatedAt: time.Now(), ExpiresAt: claims.ExpiresAt.Time,
+	}); err != nil {
+		t.Fatalf("Create() session error = %v", err)
+	}
+	authService := NewAuthServiceWithSessionStore(nil, jwtService, nil, sessions)
 
 	response, err := authService.RefreshToken(token)
 	if err != nil {
@@ -106,16 +128,53 @@ func TestAuthServiceRefreshToken(t *testing.T) {
 		t.Errorf("RefreshToken() response = %#v, want successful response with token", response)
 	}
 
-	claims, err := jwtService.ValidateToken(response.Token)
+	claims, err = jwtService.ValidateToken(response.Token)
 	if err != nil {
 		t.Fatalf("refreshed token validation error = %v", err)
 	}
 	if claims.UserID != "user-789" {
 		t.Errorf("refreshed token user ID = %q, want %q", claims.UserID, "user-789")
 	}
+	validation, err := authService.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken() old session error = %v", err)
+	}
+	if validation.Valid {
+		t.Fatal("ValidateToken() old session is valid after refresh")
+	}
 
 	if _, err := authService.RefreshToken("invalid-token"); err == nil {
 		t.Error("RefreshToken() invalid token error = nil, want an error")
+	}
+}
+
+func TestAuthServiceLogoutRevokesSession(t *testing.T) {
+	jwtService := newTestJWTService()
+	sessions := newTestSessionStore()
+	token, err := jwtService.GenerateToken("user-logout")
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+	claims, err := jwtService.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+	if err := sessions.Create(t.Context(), models.UserSession{
+		ID: claims.ID, UserID: claims.UserID, CreatedAt: time.Now(), ExpiresAt: claims.ExpiresAt.Time,
+	}); err != nil {
+		t.Fatalf("Create() session error = %v", err)
+	}
+
+	authService := NewAuthServiceWithSessionStore(nil, jwtService, nil, sessions)
+	if err := authService.Logout(token); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+	response, err := authService.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken() after logout error = %v", err)
+	}
+	if response.Valid {
+		t.Fatal("ValidateToken() session is valid after logout")
 	}
 }
 
@@ -144,6 +203,9 @@ func TestJWTServiceGenerateTokenIncludesExpectedClaims(t *testing.T) {
 	if claims.UserID != "user-42" {
 		t.Fatalf("ValidateToken() user ID = %q, want %q", claims.UserID, "user-42")
 	}
+	if claims.ID == "" {
+		t.Fatal("ValidateToken() returned claims without a session ID")
+	}
 	if claims.IssuedAt == nil || claims.NotBefore == nil || claims.ExpiresAt == nil {
 		t.Fatal("ValidateToken() claims missing timestamps")
 	}
@@ -168,4 +230,41 @@ func signedTestToken(t *testing.T, secret, userID string, expiresAt time.Time) s
 		t.Fatalf("SignedString() error = %v", err)
 	}
 	return signed
+}
+
+type testSessionStore struct {
+	sessions map[string]models.UserSession
+}
+
+func newTestSessionStore() *testSessionStore {
+	return &testSessionStore{sessions: make(map[string]models.UserSession)}
+}
+
+func (s *testSessionStore) Create(_ context.Context, session models.UserSession) error {
+	s.sessions[session.ID] = session
+	return nil
+}
+
+func (s *testSessionStore) IsActive(_ context.Context, sessionID, userID string, now time.Time) (bool, error) {
+	session, ok := s.sessions[sessionID]
+	return ok && session.UserID == userID && session.RevokedAt == nil && session.ExpiresAt.After(now), nil
+}
+
+func (s *testSessionStore) Revoke(_ context.Context, sessionID, userID string, revokedAt time.Time) error {
+	session, ok := s.sessions[sessionID]
+	if ok && session.UserID == userID && session.RevokedAt == nil {
+		session.RevokedAt = &revokedAt
+		s.sessions[sessionID] = session
+	}
+	return nil
+}
+
+func (s *testSessionStore) RevokeAll(_ context.Context, userID string, revokedAt time.Time) error {
+	for id, session := range s.sessions {
+		if session.UserID == userID && session.RevokedAt == nil {
+			session.RevokedAt = &revokedAt
+			s.sessions[id] = session
+		}
+	}
+	return nil
 }

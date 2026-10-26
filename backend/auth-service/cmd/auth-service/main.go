@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"auth-service/internal/config"
 	"auth-service/internal/handlers"
@@ -46,6 +48,15 @@ func main() {
 	log.Info("JWT service initialized")
 
 	cookieConfig := config.NewCookieConfig(cfg.CookieSecure, cfg.CookieMaxAge, cfg.CookieSameSite, cfg.CookieDomain)
+	sessionStore := services.NewMongoSessionStore(mongoConfig)
+	indexCtx, cancelIndex := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := sessionStore.EnsureIndexes(indexCtx); err != nil {
+		cancelIndex()
+		log.Error("Failed to initialize user session indexes", zap.Error(err))
+		os.Exit(1)
+	}
+	cancelIndex()
+	log.Info("User session collection initialized")
 
 	// Initialize Kafka publisher for user lifecycle events.
 	kafkaPublisher, err := services.NewKafkaPublisher(
@@ -73,7 +84,7 @@ func main() {
 	if kafkaPublisher != nil {
 		userEventPublisher = kafkaPublisher
 	}
-	authService := services.NewAuthService(mongoConfig, jwtService, userEventPublisher)
+	authService := services.NewAuthServiceWithSessionStore(mongoConfig, jwtService, userEventPublisher, sessionStore)
 	authHandler := handlers.NewAuthHandler(authService, log, cookieConfig)
 	log.Info("Auth service and handlers initialized")
 
