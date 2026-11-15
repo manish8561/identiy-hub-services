@@ -20,6 +20,8 @@ type AuthService struct {
 	jwtService  *JWTService
 	sessions    SessionStore
 	publisher   UserEventPublisher
+	emailSender EmailSender
+	frontendURL string
 }
 
 var (
@@ -27,6 +29,10 @@ var (
 	ErrInvalidSession         = errors.New("invalid session")
 	ErrPasswordUnchanged      = errors.New("new password must be different from the current password")
 	ErrPasswordTooLong        = errors.New("new password exceeds the maximum supported length")
+	ErrEmailNotVerified       = errors.New("email address is not verified")
+	ErrAccountSuspended       = errors.New("account is suspended")
+	ErrInvalidActionToken     = errors.New("invalid or expired action token")
+	ErrForbidden              = errors.New("forbidden")
 )
 
 // UserEventPublisher publishes user lifecycle events.
@@ -43,11 +49,24 @@ func NewAuthService(mongoConfig *config.MongoDBConfig, jwtService *JWTService, p
 
 // NewAuthServiceWithSessionStore creates an AuthService with an explicit session store.
 func NewAuthServiceWithSessionStore(mongoConfig *config.MongoDBConfig, jwtService *JWTService, publisher UserEventPublisher, sessions SessionStore) *AuthService {
+	return NewAuthServiceWithDependencies(mongoConfig, jwtService, publisher, sessions, nil, "")
+}
+
+func NewAuthServiceWithDependencies(
+	mongoConfig *config.MongoDBConfig,
+	jwtService *JWTService,
+	publisher UserEventPublisher,
+	sessions SessionStore,
+	emailSender EmailSender,
+	frontendURL string,
+) *AuthService {
 	return &AuthService{
 		mongoConfig: mongoConfig,
 		jwtService:  jwtService,
 		sessions:    sessions,
 		publisher:   publisher,
+		emailSender: emailSender,
+		frontendURL: frontendURL,
 	}
 }
 
@@ -67,6 +86,19 @@ func (s *AuthService) Login(email, plainPassword string) (*models.LoginResponse,
 	ok, needsRehash := password.Check(user.Password, plainPassword)
 	if !ok {
 		return nil, errors.New("invalid credentials")
+	}
+	if user.Status == "suspended" {
+		return nil, ErrAccountSuspended
+	}
+	// Legacy accounts predate the emailVerified field and remain verified.
+	if !user.EmailVerified {
+		var legacyUser bson.M
+		if err := collection.FindOne(ctx, bson.M{
+			"_id":           user.ID,
+			"emailVerified": bson.M{"$exists": false},
+		}).Decode(&legacyUser); err != nil {
+			return nil, ErrEmailNotVerified
+		}
 	}
 
 	if needsRehash {
@@ -175,14 +207,15 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 
 	// Create new user
 	newUser := models.User{
-		ID:        primitive.NewObjectID().Hex(),
-		Name:      req.Name,
-		Email:     req.Email,
-		Password:  hashedPassword,
-		Status:    "active",
-		Role:      "customer",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:            primitive.NewObjectID().Hex(),
+		Name:          req.Name,
+		Email:         req.Email,
+		Password:      hashedPassword,
+		Status:        "active",
+		Role:          "customer",
+		EmailVerified: false,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	// Insert user into database
@@ -192,14 +225,15 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 	}
 
 	event := models.UserEvent{
-		EventID:   primitive.NewObjectID().Hex(),
-		EventType: models.EventTypeUserCreated,
-		Timestamp: time.Now().UTC(),
-		UserID:    newUser.ID,
-		Email:     newUser.Email,
-		Name:      newUser.Name,
-		Status:    newUser.Status,
-		Role:      newUser.Role,
+		EventID:       primitive.NewObjectID().Hex(),
+		EventType:     models.EventTypeUserCreated,
+		Timestamp:     time.Now().UTC(),
+		UserID:        newUser.ID,
+		Email:         newUser.Email,
+		Name:          newUser.Name,
+		Status:        newUser.Status,
+		Role:          newUser.Role,
+		EmailVerified: boolPointer(newUser.EmailVerified),
 	}
 
 	if s.publisher != nil {
@@ -209,60 +243,44 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		}
 	}
 
-	token, err := s.createSession(ctx, newUser.ID)
-	if err != nil {
-		return nil, fmt.Errorf("create registration session: %w", err)
+	if err := s.issueActionEmail(ctx, newUser, actionTokenEmailVerification); err != nil {
+		return nil, fmt.Errorf("send verification email: %w", err)
 	}
 
 	return &models.RegisterResponse{
 		Status:  "success",
-		Message: "User registered successfully",
-		Token:   token,
+		Message: "Registration successful. Check your email to verify your account.",
 	}, nil
 }
 
-// DeleteAccount removes an account and publishes its deletion event.
-// If publishing fails after the account is deleted, a subsequent call with the
-// same user ID republishes the event, allowing clients to retry propagation.
-func (s *AuthService) DeleteAccount(userID string) error {
+// DeleteAccount removes the authenticated account and publishes its deletion event.
+func (s *AuthService) DeleteAccount(tokenString, currentPassword string) error {
 	if s.publisher == nil {
 		return errors.New("publish deletion event: publisher is not configured")
 	}
 	if s.sessions == nil {
 		return errors.New("user session store is not configured")
 	}
+	claims, active, err := s.validateActiveToken(tokenString)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return ErrInvalidSession
+	}
 
-	collection := s.mongoConfig.GetCollection("auth_users")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := s.sessions.RevokeAll(ctx, userID, time.Now()); err != nil {
-		return &SessionStoreError{Operation: "revoke account", Err: err}
-	}
-
 	var user models.User
-	err := collection.FindOneAndDelete(ctx, bson.M{"_id": userID}).Decode(&user)
-	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		return fmt.Errorf("delete account: %w", err)
+	if err := s.mongoConfig.GetCollection("auth_users").FindOne(ctx, bson.M{"_id": claims.UserID}).Decode(&user); err != nil {
+		return fmt.Errorf("load account for deletion: %w", err)
 	}
-
-	event := models.UserEvent{
-		EventID:   primitive.NewObjectID().Hex(),
-		EventType: models.EventTypeUserDeleted,
-		Timestamp: time.Now().UTC(),
-		UserID:    userID,
+	matches, _ := password.Check(user.Password, currentPassword)
+	if !matches {
+		return ErrInvalidCurrentPassword
 	}
-	if user.ID != "" {
-		event.Email = user.Email
-		event.Name = user.Name
-		event.Status = user.Status
-		event.Role = user.Role
-	}
-	if err := s.publisher.PublishUserDeleted(ctx, event); err != nil {
-		return fmt.Errorf("account deleted but failed to publish deletion event: %w", err)
-	}
-
-	return nil
+	return s.deleteUserAccount(claims.UserID)
 }
 
 // ValidateToken validates a JWT token and returns user information

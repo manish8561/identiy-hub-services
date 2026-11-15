@@ -125,6 +125,7 @@ import { ToastService } from '../services/toast.service';
 export class RegisterComponent implements OnInit {
   registerForm: FormGroup;
   errorMessage: string = '';
+  registrationMessage = '';
 
   constructor(
     private fb: FormBuilder,
@@ -170,13 +171,16 @@ export class RegisterComponent implements OnInit {
   onSubmit() {
     if (this.registerForm.valid) {
       this.errorMessage = '';
+      this.registrationMessage = '';
       this.changeDetector.markForCheck();
       const userData: RegisterRequest = this.registerForm.value;
       this.authService.register(userData).subscribe({
         next: (response) => {
           if (response.status === 'success') {
-            this.toastService.success('Registration successful!');
-            this.router.navigate(['/dashboard']);
+            this.registrationMessage =
+              response.message ??
+              'Registration successful. Check your email to verify your account.';
+            this.registerForm.reset();
           } else {
             this.toastService.error(
               getAuthErrorMessage(

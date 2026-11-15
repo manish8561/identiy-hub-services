@@ -125,6 +125,9 @@ import { ToastService } from '../services/toast.service';
 export class LoginComponent implements OnInit {
   loginForm: FormGroup;
   errorMessage: string = '';
+  actionMessage = '';
+  resetRequested = false;
+  verificationResent = false;
 
   constructor(
     private fb: FormBuilder,
@@ -150,6 +153,7 @@ export class LoginComponent implements OnInit {
   onSubmit() {
     if (this.loginForm.valid) {
       this.errorMessage = '';
+      this.actionMessage = '';
       this.changeDetector.markForCheck();
       const credentials: LoginRequest = this.loginForm.value;
       this.authService.login(credentials).subscribe({
@@ -170,6 +174,46 @@ export class LoginComponent implements OnInit {
         },
       });
     }
+  }
+
+  requestPasswordReset(): void {
+    const email = this.loginForm.controls['email'].value as string;
+    if (this.loginForm.controls['email'].invalid) {
+      this.loginForm.controls['email'].markAsTouched();
+      return;
+    }
+    this.authService.requestPasswordReset(email).subscribe({
+      next: () => {
+        this.actionMessage =
+          'If an account exists for that email, password reset instructions have been sent.';
+        this.resetRequested = true;
+      },
+      error: (error: unknown) => {
+        this.toastService.error(
+          getAuthErrorMessage(error, 'Could not request a password reset.'),
+        );
+      },
+    });
+  }
+
+  resendVerification(): void {
+    const email = this.loginForm.controls['email'].value as string;
+    if (this.loginForm.controls['email'].invalid) {
+      this.loginForm.controls['email'].markAsTouched();
+      return;
+    }
+    this.authService.resendVerification(email).subscribe({
+      next: () => {
+        this.actionMessage =
+          'If the account needs verification, a verification email has been sent.';
+        this.verificationResent = true;
+      },
+      error: (error: unknown) => {
+        this.toastService.error(
+          getAuthErrorMessage(error, 'Could not resend the verification email.'),
+        );
+      },
+    });
   }
 
   private showError(message: string): void {

@@ -27,6 +27,7 @@ func TestLoginPersistsSession(t *testing.T) {
 				{Key: "_id", Value: "user-login"},
 				{Key: "email", Value: "user@example.com"},
 				{Key: "password", Value: hashedPassword},
+				{Key: "emailVerified", Value: true},
 			}),
 			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 1}},
 			mtest.CreateCursorResponse(0, mt.DB.Name()+".user_sessions", mtest.FirstBatch, bson.D{
@@ -50,7 +51,7 @@ func TestLoginPersistsSession(t *testing.T) {
 	})
 }
 
-func TestRegisterPersistsSession(t *testing.T) {
+func TestRegisterCreatesUnverifiedAccountAndSendsVerificationEmail(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("register persists a session", func(mt *mtest.T) {
 		mt.AddMockResponses(
@@ -59,16 +60,18 @@ func TestRegisterPersistsSession(t *testing.T) {
 			}),
 			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 1}},
 			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 1}},
-			mtest.CreateCursorResponse(0, mt.DB.Name()+".user_sessions", mtest.FirstBatch, bson.D{
-				{Key: "_id", Value: "session-register"},
-			}),
+			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 1}},
 		)
 
 		jwtService := services.NewJWTService(config.NewJWTConfig(sessionTestJWTSecret))
-		authService := services.NewAuthService(
+		sender := &testEmailSender{}
+		authService := services.NewAuthServiceWithDependencies(
 			config.NewMongoDBConfigFromDatabase(mt.DB),
 			jwtService,
 			nil,
+			nil,
+			sender,
+			"https://app.example.test",
 		)
 
 		response, err := authService.Register(models.RegisterRequest{
@@ -78,11 +81,24 @@ func TestRegisterPersistsSession(t *testing.T) {
 			ConfirmPassword: "correct-password",
 		})
 		require.NoError(t, err)
-		require.NotEmpty(t, response.Token)
-		validation, err := authService.ValidateToken(response.Token)
-		require.NoError(t, err)
-		require.True(t, validation.Valid)
+		require.Empty(t, response.Token)
+		require.Contains(t, response.Message, "verify")
+		require.Equal(t, "register@example.com", sender.recipient)
+		require.Contains(t, sender.body, "https://app.example.test/verify-email?token=")
 	})
+}
+
+type testEmailSender struct {
+	recipient string
+	subject   string
+	body      string
+}
+
+func (s *testEmailSender) Send(_ context.Context, recipient, subject, body string) error {
+	s.recipient = recipient
+	s.subject = subject
+	s.body = body
+	return nil
 }
 
 func TestChangePasswordVerifiesCurrentPasswordAndRevokesOtherSessions(t *testing.T) {
@@ -155,6 +171,29 @@ func TestChangePasswordRejectsIncorrectCurrentPassword(t *testing.T) {
 
 		err = authService.ChangePassword(token, "wrong-password", "replacement-password")
 		require.ErrorIs(t, err, services.ErrInvalidCurrentPassword)
+	})
+}
+
+func TestLoginRejectsUnverifiedEmail(t *testing.T) {
+	hashedPassword, err := password.Hash("correct-password")
+	require.NoError(t, err)
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	mt.Run("does not create a session before email verification", func(mt *mtest.T) {
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, mt.DB.Name()+".auth_users", mtest.FirstBatch, bson.D{
+			{Key: "_id", Value: "user-unverified"},
+			{Key: "email", Value: "user@example.com"},
+			{Key: "password", Value: hashedPassword},
+			{Key: "status", Value: "active"},
+			{Key: "emailVerified", Value: false},
+		}))
+		authService := services.NewAuthService(
+			config.NewMongoDBConfigFromDatabase(mt.DB),
+			services.NewJWTService(config.NewJWTConfig(sessionTestJWTSecret)),
+			nil,
+		)
+
+		_, err := authService.Login("user@example.com", "correct-password")
+		require.ErrorIs(t, err, services.ErrEmailNotVerified)
 	})
 }
 

@@ -1,6 +1,9 @@
 <div class="register-container">
   <div class="register-card">
     <h2>Create an Account</h2>
+    <p *ngIf="registrationMessage" class="text-sm text-emerald-800" role="status">
+      {{ registrationMessage }}
+    </p>
     <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
       <div class="form-group">
         <label for="name">Name</label>

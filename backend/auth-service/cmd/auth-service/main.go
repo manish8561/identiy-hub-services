@@ -55,6 +55,13 @@ func main() {
 		log.Error("Failed to initialize user session indexes", zap.Error(err))
 		os.Exit(1)
 	}
+	emailSender := services.NewSMTPEmailSender(
+		cfg.SMTPHost,
+		cfg.SMTPPort,
+		cfg.SMTPUsername,
+		cfg.SMTPPassword,
+		cfg.EmailFrom,
+	)
 	cancelIndex()
 	log.Info("User session collection initialized")
 
@@ -84,7 +91,26 @@ func main() {
 	if kafkaPublisher != nil {
 		userEventPublisher = kafkaPublisher
 	}
-	authService := services.NewAuthServiceWithSessionStore(mongoConfig, jwtService, userEventPublisher, sessionStore)
+	authService := services.NewAuthServiceWithDependencies(
+		mongoConfig,
+		jwtService,
+		userEventPublisher,
+		sessionStore,
+		emailSender,
+		cfg.FrontendURL,
+	)
+	indexCtx, cancelIndex = context.WithTimeout(context.Background(), 10*time.Second)
+	if err := authService.EnsureActionTokenIndexes(indexCtx); err != nil {
+		cancelIndex()
+		log.Error("Failed to initialize account action token indexes", zap.Error(err))
+		os.Exit(1)
+	}
+	if err := authService.EnsureEmailVerificationDefaults(indexCtx); err != nil {
+		cancelIndex()
+		log.Error("Failed to initialize legacy account verification defaults", zap.Error(err))
+		os.Exit(1)
+	}
+	cancelIndex()
 	authHandler := handlers.NewAuthHandler(authService, log, cookieConfig)
 	log.Info("Auth service and handlers initialized")
 

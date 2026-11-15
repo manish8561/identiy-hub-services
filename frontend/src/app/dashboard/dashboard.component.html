@@ -95,7 +95,19 @@
                   scope="col"
                   class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
                 >
+                  Role
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
                   Joined
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+                >
+                  Status
                 </th>
                 <th
                   scope="col"
@@ -121,11 +133,28 @@
                   <td
                     class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
                   >
+                    {{ listedUser.role ?? "customer" }}
+                  </td>
+                  <td
+                    class="whitespace-nowrap px-6 py-4 text-sm text-gray-500"
+                  >
                     {{ listedUser.createdAt | date: "mediumDate" }}
                   </td>
                   <td class="whitespace-nowrap px-6 py-4 text-sm">
+                    <span
+                      class="rounded-full px-2 py-1 text-xs font-medium"
+                      [ngClass]="
+                        listedUser.status === 'suspended'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      "
+                    >
+                      {{ listedUser.status ?? "active" }}
+                    </span>
+                  </td>
+                  <td class="whitespace-nowrap px-6 py-4 text-sm">
                     <div
-                      *ngIf="confirmingDeleteUserId !== listedUser.id"
+                      *ngIf="confirmingDeleteUserId !== listedUser.id && listedUser.id !== user?.id"
                       class="flex items-center gap-3"
                     >
                       <button
@@ -136,6 +165,22 @@
                         Edit
                       </button>
                       <button
+                        *ngIf="listedUser.role !== 'admin'"
+                        type="button"
+                        [disabled]="changingStatusId === listedUser.id"
+                        class="font-medium text-amber-800 hover:text-amber-950 disabled:opacity-50"
+                        (click)="toggleAccountStatus(listedUser)"
+                      >
+                        {{
+                          changingStatusId === listedUser.id
+                            ? "Saving..."
+                            : listedUser.status === "suspended"
+                              ? "Reactivate"
+                              : "Suspend"
+                        }}
+                      </button>
+                      <button
+                        *ngIf="listedUser.role !== 'admin'"
                         type="button"
                         class="font-medium text-red-700 hover:text-red-900"
                         (click)="requestUserDeletion(listedUser.id)"
@@ -144,7 +189,7 @@
                       </button>
                     </div>
                     <div
-                      *ngIf="confirmingDeleteUserId === listedUser.id"
+                      *ngIf="confirmingDeleteUserId === listedUser.id && listedUser.role !== 'admin'"
                       class="space-y-2"
                     >
                       <p class="text-sm text-red-800">
@@ -176,7 +221,7 @@
                   </td>
                 </tr>
                 <tr *ngIf="editingUserId === listedUser.id">
-                  <td colspan="4" class="bg-gray-50 px-6 py-4">
+                  <td colspan="6" class="bg-gray-50 px-6 py-4">
                     <form
                       [formGroup]="userForm"
                       (ngSubmit)="saveUser(listedUser)"

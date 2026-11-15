@@ -75,4 +75,25 @@ describe('AuthService', () => {
     expect(httpRequest.request.withCredentials).toBeTrue();
     httpRequest.flush({ status: 'success', message: 'password changed' });
   });
+
+  it('requests a password reset without exposing account state', () => {
+    service.requestPasswordReset('user@example.com').subscribe();
+    const request = httpTestingController.expectOne(
+      `${environment.apiUrl}/auth/password/forgot`,
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'user@example.com' });
+    expect(request.request.withCredentials).toBeTrue();
+    request.flush({ status: 'success' });
+  });
+
+  it('sends current-password confirmation with self-service account deletion', () => {
+    service.deleteAccount('current-password').subscribe();
+    const request = httpTestingController.expectOne(
+      `${environment.apiUrl}/auth/account`,
+    );
+    expect(request.request.method).toBe('DELETE');
+    expect(request.request.body).toEqual({ currentPassword: 'current-password' });
+    request.flush({ status: 'success' });
+  });
 });

@@ -22,10 +22,18 @@ func NewRouter(authHandler *handlers.AuthHandler, log logger.Logger, allowedOrig
 	{
 		api.POST("/login", authHandler.Login)
 		api.POST("/register", authHandler.Register)
+		api.POST("/verification/resend", authHandler.ResendVerification)
+		api.POST("/verify-email", authHandler.VerifyEmail)
+		api.POST("/password/forgot", authHandler.RequestPasswordReset)
+		api.POST("/password/reset", authHandler.ResetPassword)
 		api.POST("/validate", authHandler.ValidateToken)
 		api.POST("/refresh", authHandler.RefreshToken)
 		api.GET("/me", authHandler.Me)
 		api.POST("/password", authHandler.ChangePassword)
+		api.PUT("/profile", authHandler.UpdateOwnProfile)
+		api.PUT("/users/:id", authHandler.UpdateUserByAdmin)
+		api.DELETE("/users/:id", authHandler.DeleteUserByAdmin)
+		api.PUT("/users/:id/status", authHandler.SetAccountStatus)
 		api.DELETE("/account", authHandler.DeleteAccount)
 		api.POST("/logout", authHandler.Logout)
 	}

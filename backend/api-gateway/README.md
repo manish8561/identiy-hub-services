@@ -193,10 +193,18 @@ The API Gateway proxies requests to the appropriate services:
 ### Authentication (proxied to auth-service)
 - `POST /api/auth/login` - User login
 - `POST /api/auth/register` - User registration  
+- `POST /api/auth/verify-email` - Verify registration or changed email
+- `POST /api/auth/verification/resend` - Resend verification email
+- `POST /api/auth/password/forgot` - Request password reset email
+- `POST /api/auth/password/reset` - Reset password with one-time token
 - `POST /api/auth/validate` - Token validation
 - `POST /api/auth/refresh` - Token refresh
 - `POST /api/auth/password` - Change the authenticated user's password
-- `DELETE /api/auth/account` - Delete the authenticated account and clear its session
+- `PUT /api/auth/profile` - Update the current user's name/email
+- `DELETE /api/auth/account` - Delete the authenticated account after current-password confirmation
+- `PUT /api/auth/users/{id}` - Admin profile and role update
+- `DELETE /api/auth/users/{id}` - Admin customer deletion with session revocation
+- `PUT /api/auth/users/{id}/status` - Admin suspend/reactivate
 - `GET /api/auth/health` - Auth service health
 
 ### User Management (proxied to user-service)

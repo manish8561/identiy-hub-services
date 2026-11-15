@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { of } from 'rxjs';
 
 import { ProfileComponent } from './profile.component';
@@ -22,6 +23,9 @@ describe('ProfileComponent', () => {
     getProfile: () => of(profile),
     invalidateProfileCache: jasmine.createSpy(),
     changePassword: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
+    updateOwnProfile: jasmine
+      .createSpy()
+      .and.returnValue(of({ status: 'success', verificationRequired: false })),
   };
   const userService = {
     updateProfile: jasmine.createSpy().and.returnValue(of(profile)),
@@ -29,12 +33,14 @@ describe('ProfileComponent', () => {
   beforeEach(async () => {
     authService.invalidateProfileCache.calls.reset();
     authService.changePassword.calls.reset();
+    authService.updateOwnProfile.calls.reset();
     userService.updateProfile.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent],
       providers: [
         { provide: AuthService, useValue: authService },
+        { provide: Router, useValue: { navigate: jasmine.createSpy() } },
         { provide: UserService, useValue: userService },
         {
           provide: ToastService,
@@ -70,14 +76,15 @@ describe('ProfileComponent', () => {
     component.profileForm.setValue({
       name: 'Updated Name',
       email: 'updated@example.com',
+      currentPassword: 'existing-password',
     });
 
     component.saveProfile();
 
-    expect(userService.updateProfile).toHaveBeenCalledWith('user-1', {
+    expect(authService.updateOwnProfile).toHaveBeenCalledWith({
       name: 'Updated Name',
       email: 'updated@example.com',
-      role: 'customer',
+      currentPassword: 'existing-password',
     });
     expect(authService.invalidateProfileCache).toHaveBeenCalled();
     expect(component.editingProfile).toBeFalse();

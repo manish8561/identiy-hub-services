@@ -9,6 +9,8 @@ export interface UserProfile {
   name: string;
   email: string;
   role?: string;
+  status?: string;
+  emailVerified?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -4,14 +4,15 @@ import "time"
 
 // User represents a user in the system
 type User struct {
-	ID        string    `json:"id" bson:"_id,omitempty"`
-	Name      string    `json:"name" bson:"name"`
-	Email     string    `json:"email" binding:"required,email" bson:"email"`
-	Password  string    `json:"-" bson:"password"`
-	Status    string    `json:"status" bson:"status"`
-	Role      string    `json:"role" bson:"role"`
-	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
+	ID            string    `json:"id" bson:"_id,omitempty"`
+	Name          string    `json:"name" bson:"name"`
+	Email         string    `json:"email" binding:"required,email" bson:"email"`
+	Password      string    `json:"-" bson:"password"`
+	Status        string    `json:"status" bson:"status"`
+	Role          string    `json:"role" bson:"role"`
+	EmailVerified bool      `json:"emailVerified" bson:"emailVerified"`
+	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
 // UserSession represents one issued authentication cookie without storing its bearer token.
@@ -48,6 +49,40 @@ type ChangePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword" binding:"required"`
 	NewPassword     string `json:"newPassword" binding:"required,min=6,max=72"`
 	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+}
+
+type EmailRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type VerifyEmailRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+type ResetPasswordRequest struct {
+	Token           string `json:"token" binding:"required"`
+	NewPassword     string `json:"newPassword" binding:"required,min=6,max=72"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+}
+
+type DeleteAccountRequest struct {
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+}
+
+type AccountStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=active suspended"`
+}
+
+type AdminUpdateUserRequest struct {
+	Name  string `json:"name" binding:"required,max=100"`
+	Email string `json:"email" binding:"required,email"`
+	Role  string `json:"role" binding:"required,oneof=customer admin"`
+}
+
+type UpdateOwnProfileRequest struct {
+	Name            string `json:"name" binding:"required,max=100"`
+	Email           string `json:"email" binding:"required,email"`
+	CurrentPassword string `json:"currentPassword"`
 }
 
 // RegisterResponse represents a registration response.

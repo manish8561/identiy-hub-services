@@ -59,6 +59,12 @@ services:
       - MONGO_URI=mongodb://admin:password123@mongodb:27017
       - MONGO_DB=auth_db
       - JWT_SECRET=test-jwt-secret-key-for-testing
+      - FRONTEND_URL=http://localhost:8085
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
       - COOKIE_SECURE=false
       - COOKIE_SAME_SITE=Lax
       - ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8085

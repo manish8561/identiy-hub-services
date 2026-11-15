@@ -18,6 +18,12 @@ const (
 
 // CookieAuth validates the access token cookie (with Bearer fallback) and sets user_id.
 func CookieAuth(jwtSecret string) gin.HandlerFunc {
+	return CookieAuthWithAccountStatus(jwtSecret, nil)
+}
+
+type AccountStatusChecker func(userID, sessionID string) (bool, error)
+
+func CookieAuthWithAccountStatus(jwtSecret string, accountActive AccountStatusChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := extractToken(c)
 		if tokenString == "" {
@@ -46,6 +52,22 @@ func CookieAuth(jwtSecret string) gin.HandlerFunc {
 		if userID == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid user ID in token"})
 			return
+		}
+		if accountActive != nil {
+			sessionID, _ := claims["jti"].(string)
+			if sessionID == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid session ID in token"})
+				return
+			}
+			active, err := accountActive(userID, sessionID)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to validate account status"})
+				return
+			}
+			if !active {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "account is inactive or email is unverified"})
+				return
+			}
 		}
 
 		c.Set(ContextUserIDKey, userID)

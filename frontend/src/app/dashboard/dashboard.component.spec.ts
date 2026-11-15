@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { DashboardComponent } from './dashboard.component';
@@ -25,6 +26,11 @@ describe('DashboardComponent', () => {
   };
   const authService = {
     getProfile: jasmine.createSpy().and.returnValue(of(profile)),
+    updateUser: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
+    deleteUser: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
+    setAccountStatus: jasmine
+      .createSpy()
+      .and.returnValue(of({ status: 'success' })),
   };
   const userService = {
     listUsers: jasmine.createSpy().and.returnValue(
@@ -48,6 +54,9 @@ describe('DashboardComponent', () => {
 
   beforeEach(async () => {
     authService.getProfile.and.returnValue(of(profile));
+    authService.updateUser.calls.reset();
+    authService.deleteUser.calls.reset();
+    authService.setAccountStatus.calls.reset();
     userService.listUsers.calls.reset();
     userService.updateProfile.calls.reset();
     userService.deleteProfile.calls.reset();
@@ -60,6 +69,7 @@ describe('DashboardComponent', () => {
         { provide: AuthService, useValue: authService },
         { provide: UserService, useValue: userService },
         { provide: ToastService, useValue: toastService },
+        provideRouter([]),
       ],
     }).compileComponents();
 
@@ -78,7 +88,7 @@ describe('DashboardComponent', () => {
     expect(component.totalUsers).toBe(1);
   });
 
-  it('updates a listed user through the user API', () => {
+  it('updates a listed user through the auth API', () => {
     component.startEditingUser(listedUser);
     component.userForm.setValue({
       name: 'Updated User',
@@ -88,7 +98,7 @@ describe('DashboardComponent', () => {
 
     component.saveUser(listedUser);
 
-    expect(userService.updateProfile).toHaveBeenCalledWith('user-1', {
+    expect(authService.updateUser).toHaveBeenCalledWith('user-1', {
       name: 'Updated User',
       email: 'updated@example.com',
       role: 'admin',
@@ -98,13 +108,22 @@ describe('DashboardComponent', () => {
     );
   });
 
-  it('deletes a listed user through the user API after confirmation', () => {
+  it('deletes a listed user through the auth API after confirmation', () => {
     component.requestUserDeletion(listedUser.id);
     component.deleteUser(listedUser);
 
-    expect(userService.deleteProfile).toHaveBeenCalledWith('user-1');
+    expect(authService.deleteUser).toHaveBeenCalledWith('user-1');
     expect(toastService.success).toHaveBeenCalledWith(
       'User deleted successfully.',
+    );
+  });
+
+  it('suspends and reactivates a listed customer through the auth API', () => {
+    component.toggleAccountStatus(listedUser);
+
+    expect(authService.setAccountStatus).toHaveBeenCalledWith(
+      'user-1',
+      'suspended',
     );
   });
 

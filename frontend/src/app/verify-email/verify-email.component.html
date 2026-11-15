@@ -1,0 +1,17 @@
+<main class="mx-auto mt-12 max-w-lg rounded-lg bg-white p-8 text-center shadow">
+  <h1 class="text-2xl font-semibold text-gray-900">Email verification</h1>
+  <p *ngIf="verifying" class="mt-4 text-gray-600" role="status">
+    Verifying your email...
+  </p>
+  <p *ngIf="message" class="mt-4 text-emerald-800" role="status">
+    {{ message }}
+  </p>
+  <p *ngIf="error" class="mt-4 text-red-700" role="alert">{{ error }}</p>
+  <a
+    *ngIf="message"
+    routerLink="/login"
+    class="mt-6 inline-flex rounded-md bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800"
+  >
+    Sign in
+  </a>
+</main>

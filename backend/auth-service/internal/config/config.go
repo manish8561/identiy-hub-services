@@ -20,6 +20,12 @@ type Config struct {
 	CookieMaxAge          int
 	CookieSameSite        string
 	CookieDomain          string
+	SMTPHost              string
+	SMTPPort              string
+	SMTPUsername          string
+	SMTPPassword          string
+	EmailFrom             string
+	FrontendURL           string
 	AllowedOrigins        []string
 }
 
@@ -39,6 +45,12 @@ func LoadConfig() *Config {
 		CookieMaxAge:          parseIntEnv(os.Getenv("COOKIE_MAX_AGE"), 24*60*60),
 		CookieSameSite:        getEnv("COOKIE_SAME_SITE", "Lax"),
 		CookieDomain:          getEnv("COOKIE_DOMAIN", ""),
+		SMTPHost:              getEnv("SMTP_HOST", ""),
+		SMTPPort:              getEnv("SMTP_PORT", "587"),
+		SMTPUsername:          getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:          getEnv("SMTP_PASSWORD", ""),
+		EmailFrom:             getEnv("EMAIL_FROM", ""),
+		FrontendURL:           strings.TrimRight(getEnv("FRONTEND_URL", "http://localhost:4200"), "/"),
 		AllowedOrigins:        splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:8085")),
 	}
 }

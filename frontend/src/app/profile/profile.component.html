@@ -88,6 +88,27 @@
                       Enter a valid email address.
                     </span>
                   </label>
+                  <label
+                    *ngIf="profileForm.get('email')?.value !== user.email"
+                    class="block text-sm font-medium text-gray-700 sm:col-span-2"
+                  >
+                    Current password (required to change your email)
+                    <input
+                      type="password"
+                      formControlName="currentPassword"
+                      autocomplete="current-password"
+                      class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                    />
+                    <span
+                      *ngIf="
+                        !profileForm.value.currentPassword &&
+                        profileForm.controls['currentPassword'].touched
+                      "
+                      class="mt-1 block text-sm text-red-700"
+                    >
+                      Enter your current password to change your email.
+                    </span>
+                  </label>
                 </div>
                 <div class="flex flex-wrap gap-3">
                   <button
@@ -123,6 +144,20 @@
                   <dt class="text-sm font-medium text-gray-500">Role</dt>
                   <dd class="mt-1 text-sm capitalize text-gray-900">
                     {{ user.role }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Email status</dt>
+                  <dd class="mt-1 flex items-center gap-3 text-sm text-gray-900">
+                    {{ user.emailVerified === false ? "Not verified" : "Verified" }}
+                    <button
+                      *ngIf="user.emailVerified === false"
+                      type="button"
+                      class="font-medium text-emerald-800 underline"
+                      (click)="resendVerification()"
+                    >
+                      Resend verification
+                    </button>
                   </dd>
                 </div>
                 <div *ngIf="user.createdAt">
@@ -346,6 +381,61 @@
               </button>
             </div>
           </div>
+        </section>
+
+        <section
+          *ngIf="user?.role !== 'admin'"
+          class="mt-8 rounded-lg border border-red-200 bg-white p-6 shadow"
+          aria-labelledby="delete-account-title"
+        >
+          <h2 id="delete-account-title" class="text-lg font-medium text-red-800">
+            Delete account
+          </h2>
+          <p class="mt-1 text-sm text-gray-600">
+            Permanently delete your account and profile. This cannot be undone
+            and will sign you out of all sessions.
+          </p>
+          <button
+            *ngIf="!confirmingAccountDeletion"
+            type="button"
+            class="mt-4 rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800"
+            (click)="confirmAccountDeletion()"
+          >
+            Delete my account
+          </button>
+          <form
+            *ngIf="confirmingAccountDeletion"
+            [formGroup]="accountDeleteForm"
+            (ngSubmit)="deleteAccount()"
+            class="mt-4 max-w-xl space-y-4"
+          >
+            <label class="block text-sm font-medium text-gray-700">
+              Enter your current password to confirm
+              <input
+                type="password"
+                formControlName="currentPassword"
+                autocomplete="current-password"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+            </label>
+            <div class="flex gap-3">
+              <button
+                type="submit"
+                [disabled]="deletingAccount"
+                class="rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {{ deletingAccount ? "Deleting..." : "Permanently delete account" }}
+              </button>
+              <button
+                type="button"
+                [disabled]="deletingAccount"
+                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
+                (click)="cancelAccountDeletion()"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </section>
       </div>
     </div>

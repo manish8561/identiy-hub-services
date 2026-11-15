@@ -12,7 +12,16 @@ The application has been decomposed into the following microservices:
 - **Purpose**: Handles user authentication, registration, and session management via HttpOnly cookies
 - **Endpoints**:
   - `POST /api/auth/login` - User login (sets `access_token` cookie)
-  - `POST /api/auth/register` - User registration (sets `access_token` cookie)
+  - `POST /api/auth/register` - Register and send an email verification link
+  - `POST /api/auth/verify-email` - Verify an email with a one-time token
+  - `POST /api/auth/verification/resend` - Resend a verification email
+  - `POST /api/auth/password/forgot` - Request a password reset email
+  - `POST /api/auth/password/reset` - Reset a password with a one-time token
+  - `POST /api/auth/password` - Change password while signed in
+  - `DELETE /api/auth/account` - Permanently delete the signed-in account (requires current password)
+  - `PUT /api/auth/users/:id` - Admin-only profile and role update
+  - `DELETE /api/auth/users/:id` - Admin-only customer deletion
+  - `PUT /api/auth/users/:id/status` - Admin-only suspend/reactivate
   - `GET /api/auth/me` - Get current session user ID from cookie
   - `POST /api/auth/logout` - Revoke the current server-side session and clear its cookie
   - `POST /api/auth/validate` - Token validation (cookie, body, or Bearer)
@@ -25,11 +34,11 @@ The application has been decomposed into the following microservices:
 - **Endpoints** (all require `access_token` cookie or Bearer token):
   - `GET /api/users/me` - Get current user's profile
   - `GET /api/users/profile/:id` - Get user profile by ID (must match session user)
-  - `GET /api/users/list` - List customer users (paginated; admin role required)
+  - `GET /api/users/list` - List users (paginated; admin role required)
   - `PUT /api/users/profile/:id` - Update own profile, or any user as an admin
   - `DELETE /api/users/profile/:id` - Delete a user (admin role required)
 
-Admin accounts must be provisioned through a trusted operational process; users cannot grant themselves the `admin` role through profile updates. Keep the `role` synchronized for the account in both `auth_db.auth_users` and `user_db.user_profiles`. User list and update responses omit password fields.
+Admin accounts must be provisioned through a trusted operational process; users cannot grant themselves the `admin` role through profile updates. Admin changes to profile and role are persisted by auth-service and synchronized to `user_db.user_profiles` through Kafka. User list and update responses omit password fields.
 
 ### 3. Notification Service (`notification-service`)
 
@@ -57,6 +66,7 @@ Admin accounts must be provisioned through a trusted operational process; users 
 
 - **MongoDB**: Database-per-service model
 - **Collections**: `auth_db.auth_users` and `auth_db.user_sessions` (auth-service), `user_db.user_profiles` (user-service, synced via Kafka)
+- **Action tokens**: `auth_db.auth_action_tokens` stores only SHA-256 token hashes, with TTL expiry; verification links expire after 24 hours and password-reset links after 30 minutes. Tokens are single-use.
 - **Notification database**: `notification_db.notification_preferences` and `notification_db.notification_records`
 
 ## Authentication
@@ -64,6 +74,8 @@ Admin accounts must be provisioned through a trusted operational process; users 
 Sessions use an **HttpOnly cookie** named `access_token` containing a JWT. The browser sends this cookie automatically on subsequent requests; the frontend does not store tokens in `localStorage`.
 
 Each issued cookie has a corresponding `auth_db.user_sessions` document keyed by the JWT session ID (`jti`). Session documents store the user ID, creation and expiration times, and an optional revocation time; the bearer token itself is never persisted. Auth validation checks that the session is active. Logout and refresh revoke the replaced session, account deletion revokes all of the user's sessions, and MongoDB's TTL index removes expired session documents. Existing cookies issued before this change have no session ID and must sign in again after deployment.
+
+New self-registered accounts must verify their email before signing in. Legacy accounts without the `emailVerified` field remain verified and are marked verified at auth-service startup. Password reset and email verification use expiring, single-use, hashed tokens sent through SMTP. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM` on auth-service, and set `FRONTEND_URL` to the public frontend origin so emailed links return to the correct app. User-service checks both synced account status and the active session record, so suspended/revoked sessions are rejected immediately.
 
 | Setting         | Env var            | Default                                       |
 | --------------- | ------------------ | --------------------------------------------- |
@@ -273,7 +285,7 @@ The repository-level `test.sh` script starts the test MongoDB container and runs
 
 ### Authentication (via API Gateway)
 
-Login and register set an `access_token` HttpOnly cookie. Use `-c` / `-b` with curl to persist and send cookies.
+Login sets an `access_token` HttpOnly cookie after email verification. Registration sends a verification email and does not create a session. Use `-c` / `-b` with curl to persist and send cookies.
 
 ```bash
 # Login (saves cookie to cookies.txt)

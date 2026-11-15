@@ -12,6 +12,10 @@ import (
 
 // NewRouter configures all routes for the user service
 func NewRouter(userHandler *handlers.UserHandler, log logger.Logger, jwtSecret string, allowedOrigins []string) *gin.Engine {
+	return NewRouterWithAccountStatus(userHandler, log, jwtSecret, allowedOrigins, nil)
+}
+
+func NewRouterWithAccountStatus(userHandler *handlers.UserHandler, log logger.Logger, jwtSecret string, allowedOrigins []string, accountActive middleware.AccountStatusChecker) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(middleware.EnableCORS(allowedOrigins))
@@ -19,7 +23,7 @@ func NewRouter(userHandler *handlers.UserHandler, log logger.Logger, jwtSecret s
 
 	api := r.Group("/api/users")
 	api.Use(middleware.RateLimit())
-	api.Use(middleware.CookieAuth(jwtSecret))
+	api.Use(middleware.CookieAuthWithAccountStatus(jwtSecret, accountActive))
 	{
 		api.GET("/me", userHandler.GetCurrentUser)
 		api.GET("/profile/:id", userHandler.GetUserByID)

@@ -35,6 +35,7 @@ export class DashboardComponent implements OnInit {
   savingUserId: string | null = null;
   confirmingDeleteUserId: string | null = null;
   deletingUserId: string | null = null;
+  changingStatusId: string | null = null;
   readonly userForm: FormGroup;
 
   get pageCount(): number {
@@ -106,7 +107,7 @@ export class DashboardComponent implements OnInit {
   }
 
   startEditingUser(user: UserProfile): void {
-    if (!this.isAdmin) {
+    if (!this.isAdmin || user.id === this.user?.id) {
       return;
     }
     this.confirmingDeleteUserId = null;
@@ -123,7 +124,7 @@ export class DashboardComponent implements OnInit {
   }
 
   saveUser(user: UserProfile): void {
-    if (!this.isAdmin || this.savingUserId) {
+    if (!this.isAdmin || user.id === this.user?.id || this.savingUserId) {
       return;
     }
     if (this.userForm.invalid) {
@@ -132,8 +133,8 @@ export class DashboardComponent implements OnInit {
     }
 
     this.savingUserId = user.id;
-    this.userService
-      .updateProfile(user.id, {
+    this.authService
+      .updateUser(user.id, {
         name: this.userForm.value.name.trim(),
         email: this.userForm.value.email.trim(),
         role: this.userForm.value.role,
@@ -157,7 +158,7 @@ export class DashboardComponent implements OnInit {
   }
 
   requestUserDeletion(userId: string): void {
-    if (!this.isAdmin) {
+    if (!this.isAdmin || userId === this.user?.id) {
       return;
     }
     this.editingUserId = null;
@@ -169,12 +170,12 @@ export class DashboardComponent implements OnInit {
   }
 
   deleteUser(user: UserProfile): void {
-    if (!this.isAdmin || this.deletingUserId) {
+    if (!this.isAdmin || user.role === 'admin' || this.deletingUserId) {
       return;
     }
 
     this.deletingUserId = user.id;
-    this.userService.deleteProfile(user.id).subscribe({
+    this.authService.deleteUser(user.id).subscribe({
       next: () => {
         this.deletingUserId = null;
         this.confirmingDeleteUserId = null;
@@ -188,6 +189,38 @@ export class DashboardComponent implements OnInit {
           error instanceof Error
             ? error.message
             : 'Could not delete this user. Please try again.',
+        );
+      },
+    });
+  }
+
+  toggleAccountStatus(user: UserProfile): void {
+    if (
+      !this.isAdmin ||
+      user.role === 'admin' ||
+      user.id === this.user?.id ||
+      this.changingStatusId
+    ) {
+      return;
+    }
+    const status = user.status === 'suspended' ? 'active' : 'suspended';
+    this.changingStatusId = user.id;
+    this.authService.setAccountStatus(user.id, status).subscribe({
+      next: () => {
+        this.changingStatusId = null;
+        this.toastService.success(
+          status === 'suspended'
+            ? 'User account suspended.'
+            : 'User account reactivated.',
+        );
+        this.loadUsers(this.page);
+      },
+      error: (error: unknown) => {
+        this.changingStatusId = null;
+        this.toastService.error(
+          error instanceof Error
+            ? error.message
+            : 'Could not change this account status.',
         );
       },
     });

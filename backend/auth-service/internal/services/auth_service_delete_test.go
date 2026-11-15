@@ -3,12 +3,14 @@ package services_test
 import (
 	"auth-service/internal/config"
 	"auth-service/internal/models"
+	"auth-service/internal/password"
 	"auth-service/internal/services"
-	"errors"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 )
@@ -16,17 +18,26 @@ import (
 func TestDeleteAccountRequiresPublisher(t *testing.T) {
 	authService := services.NewAuthService(nil, nil, nil)
 
-	if err := authService.DeleteAccount("user-123"); err == nil {
+	if err := authService.DeleteAccount("token", "current-password"); err == nil {
 		t.Fatal("DeleteAccount() error = nil, want missing publisher error")
 	}
 }
 
-func TestDeleteAccountPublishesDeletionAndCanRetryAfterPublishFailure(t *testing.T) {
+func TestDeleteAccountVerifiesPasswordRevokesSessionsAndPublishesDeletion(t *testing.T) {
+	hashedPassword, err := password.Hash("current-password")
+	require.NoError(t, err)
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 
-	mt.Run("retry publishes deletion event", func(mt *mtest.T) {
+	mt.Run("deletes only after password confirmation", func(mt *mtest.T) {
 		mt.AddMockResponses(
-			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 0}, {Key: "nModified", Value: 0}},
+			mtest.CreateCursorResponse(0, mt.DB.Name()+".auth_users", mtest.FirstBatch, bson.D{
+				{Key: "_id", Value: "user-123"},
+				{Key: "name", Value: "Test User"},
+				{Key: "email", Value: "test@example.com"},
+				{Key: "password", Value: hashedPassword},
+				{Key: "status", Value: "active"},
+				{Key: "role", Value: "customer"},
+			}),
 			bson.D{
 				{Key: "ok", Value: 1},
 				{Key: "value", Value: bson.D{
@@ -35,10 +46,9 @@ func TestDeleteAccountPublishesDeletionAndCanRetryAfterPublishFailure(t *testing
 					{Key: "email", Value: "test@example.com"},
 					{Key: "status", Value: "active"},
 					{Key: "role", Value: "customer"},
+					{Key: "password", Value: hashedPassword},
 				}},
 			},
-			bson.D{{Key: "ok", Value: 1}, {Key: "n", Value: 0}, {Key: "nModified", Value: 0}},
-			bson.D{{Key: "ok", Value: 1}, {Key: "value", Value: nil}},
 		)
 
 		publisher := new(MockKafkaPublisher)
@@ -50,26 +60,26 @@ func TestDeleteAccountPublishesDeletionAndCanRetryAfterPublishFailure(t *testing
 				event.Status == "active" &&
 				event.Role == "customer" &&
 				!event.Timestamp.IsZero()
-		})).Return(errors.New("kafka unavailable")).Once()
-		publisher.On("PublishUserDeleted", mock.Anything, mock.MatchedBy(func(event models.UserEvent) bool {
-			return event.EventType == "user.deleted.v1" &&
-				event.UserID == "user-123" &&
-				event.Email == "" &&
-				!event.Timestamp.Before(time.Now().Add(-time.Minute))
 		})).Return(nil).Once()
 
-		authService := services.NewAuthService(
+		jwtService := services.NewJWTService(config.NewJWTConfig(sessionTestJWTSecret))
+		sessions := newPasswordChangeSessionStore()
+		token, sessionID, expiresAt, err := jwtService.GenerateTokenWithSession("user-123")
+		require.NoError(t, err)
+		require.NoError(t, sessions.Create(context.Background(), models.UserSession{
+			ID: sessionID, UserID: "user-123", ExpiresAt: expiresAt,
+		}))
+		authService := services.NewAuthServiceWithSessionStore(
 			config.NewMongoDBConfigFromDatabase(mt.DB),
-			nil,
+			jwtService,
 			publisher,
+			sessions,
 		)
 
-		if err := authService.DeleteAccount("user-123"); err == nil {
-			t.Fatal("DeleteAccount() error = nil, want publish failure")
-		}
-		if err := authService.DeleteAccount("user-123"); err != nil {
-			t.Fatalf("DeleteAccount() retry error = %v", err)
-		}
+		require.NoError(t, authService.DeleteAccount(token, "current-password"))
+		active, err := sessions.IsActive(context.Background(), sessionID, "user-123", time.Now())
+		require.NoError(t, err)
+		require.False(t, active)
 		publisher.AssertExpectations(t)
 	})
 }

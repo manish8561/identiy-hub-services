@@ -101,14 +101,95 @@ export class AuthService {
         `${this.apiUrl}/auth/register`,
         userData,
         this.httpOptions,
-      )
-      .pipe(tap((response) => this.setAuthenticated(response)));
+      );
   }
 
   changePassword(request: ChangePasswordRequest): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(
       `${this.apiUrl}/auth/password`,
       request,
+      this.httpOptions,
+    );
+  }
+
+  verifyEmail(token: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(
+      `${this.apiUrl}/auth/verify-email`,
+      { token },
+      this.httpOptions,
+    );
+  }
+
+  resendVerification(email: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(
+      `${this.apiUrl}/auth/verification/resend`,
+      { email },
+      this.httpOptions,
+    );
+  }
+
+  requestPasswordReset(email: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(
+      `${this.apiUrl}/auth/password/forgot`,
+      { email },
+      this.httpOptions,
+    );
+  }
+
+  resetPassword(request: {
+    token: string;
+    newPassword: string;
+    confirmPassword: string;
+  }): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(
+      `${this.apiUrl}/auth/password/reset`,
+      request,
+      this.httpOptions,
+    );
+  }
+
+  deleteAccount(currentPassword: string): Observable<AuthResponse> {
+    return this.http.request<AuthResponse>(
+      'DELETE',
+      `${this.apiUrl}/auth/account`,
+      { ...this.httpOptions, body: { currentPassword } },
+    );
+  }
+
+  updateOwnProfile(request: {
+    name: string;
+    email: string;
+    currentPassword?: string;
+  }): Observable<AuthResponse & { verificationRequired?: boolean }> {
+    return this.http.put<AuthResponse & { verificationRequired?: boolean }>(
+      `${this.apiUrl}/auth/profile`,
+      request,
+      this.httpOptions,
+    );
+  }
+
+  setAccountStatus(userId: string, status: 'active' | 'suspended'): Observable<AuthResponse> {
+    return this.http.put<AuthResponse>(
+      `${this.apiUrl}/auth/users/${encodeURIComponent(userId)}/status`,
+      { status },
+      this.httpOptions,
+    );
+  }
+
+  updateUser(
+    userId: string,
+    request: { name: string; email: string; role: string },
+  ): Observable<AuthResponse> {
+    return this.http.put<AuthResponse>(
+      `${this.apiUrl}/auth/users/${encodeURIComponent(userId)}`,
+      request,
+      this.httpOptions,
+    );
+  }
+
+  deleteUser(userId: string): Observable<AuthResponse> {
+    return this.http.delete<AuthResponse>(
+      `${this.apiUrl}/auth/users/${encodeURIComponent(userId)}`,
       this.httpOptions,
     );
   }

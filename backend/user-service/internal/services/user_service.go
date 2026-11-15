@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -41,6 +42,33 @@ func (s *UserService) GetUserByID(id string) (*models.User, error) {
 	return &user, nil
 }
 
+func (s *UserService) AccountActive(id, sessionID string) (bool, error) {
+	collection := s.mongoConfig.GetCollection("user_profiles")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := collection.FindOne(ctx, bson.M{
+		"_id": id, "status": bson.M{"$ne": "suspended"}, "emailVerified": bson.M{"$ne": false},
+	}).Err()
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	err = s.mongoConfig.GetCollectionFromDatabase("auth_db", "user_sessions").FindOne(ctx, bson.M{
+		"_id": sessionID, "userId": id, "expiresAt": bson.M{"$gt": time.Now()},
+		"revokedAt": bson.M{"$exists": false},
+	}).Err()
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	return false, err
+}
+
 // ListUsers returns a paginated list of users and the total count
 func (s *UserService) ListUsers(page, pageSize int) (*models.UserListResponse, error) {
 	collection := s.mongoConfig.GetCollection("user_profiles")
@@ -50,7 +78,7 @@ func (s *UserService) ListUsers(page, pageSize int) (*models.UserListResponse, e
 	skip := int64((page - 1) * pageSize)
 	limit := int64(pageSize)
 
-	filter := bson.M{"role": "customer"}
+	filter := bson.M{}
 	findOptions := options.Find().SetSkip(skip).SetLimit(limit)
 	cursor, err := collection.Find(ctx, filter, findOptions)
 	if err != nil {
@@ -95,7 +123,6 @@ func (s *UserService) UpdateUser(id string, req models.UpdateUserRequest) (*mode
 			"updatedAt": time.Now(),
 		},
 	}
-
 	result, err := collection.UpdateOne(ctx, bson.M{"_id": id}, update)
 	if err != nil {
 		return nil, err
@@ -174,6 +201,9 @@ func (s *UserService) UpsertUserProfileFromEvent(event models.UserEvent) error {
 			"createdAt": time.Now(),
 		},
 	}
+	if event.EmailVerified != nil {
+		update["$set"].(bson.M)["emailVerified"] = *event.EmailVerified
+	}
 
 	_, err := collection.UpdateOne(ctx, bson.M{"_id": event.UserID}, update, options.Update().SetUpsert(true))
 	return err
@@ -205,6 +235,8 @@ func (s *UserService) CreateUser(req models.CreateUserRequest) (*models.User, er
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+	verified := true
+	user.EmailVerified = &verified
 
 	_, err := collection.InsertOne(ctx, user)
 	if err != nil {
@@ -212,14 +244,15 @@ func (s *UserService) CreateUser(req models.CreateUserRequest) (*models.User, er
 	}
 
 	event := models.UserEvent{
-		EventID:   primitive.NewObjectID().Hex(),
-		EventType: models.EventTypeUserCreated,
-		Timestamp: time.Now().UTC(),
-		UserID:    user.ID,
-		Email:     user.Email,
-		Name:      user.Name,
-		Status:    user.Status,
-		Role:      user.Role,
+		EventID:       primitive.NewObjectID().Hex(),
+		EventType:     models.EventTypeUserCreated,
+		Timestamp:     time.Now().UTC(),
+		UserID:        user.ID,
+		Email:         user.Email,
+		Name:          user.Name,
+		Status:        user.Status,
+		Role:          user.Role,
+		EmailVerified: &verified,
 	}
 	if err := s.publisher.PublishUserCreated(ctx, event); err != nil {
 		// Keep API behavior successful even if async event publishing fails.

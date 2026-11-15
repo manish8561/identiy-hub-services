@@ -31,9 +31,29 @@
       <div class="error-message" *ngIf="errorMessage">
         {{ errorMessage }}
       </div>
+      <p *ngIf="actionMessage" class="text-sm text-emerald-800" role="status">
+        {{ actionMessage }}
+      </p>
 
       <button type="submit" [disabled]="loginForm.invalid">Login</button>
     </form>
+
+    <div class="mt-4 flex flex-wrap justify-center gap-4 text-sm">
+      <button
+        type="button"
+        class="text-blue-700 underline"
+        (click)="requestPasswordReset()"
+      >
+        {{ resetRequested ? "Send reset email again" : "Forgot password?" }}
+      </button>
+      <button
+        type="button"
+        class="text-blue-700 underline"
+        (click)="resendVerification()"
+      >
+        {{ verificationResent ? "Resend verification email" : "Verify your email" }}
+      </button>
+    </div>
 
     <div class="register-link">
       Don't have an account? <a routerLink="/register">Register here</a>

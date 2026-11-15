@@ -100,6 +100,8 @@ Notes:
 
 Uses `deploy/docker-compose.prod.yml` with secrets from a root `.env` file. Only the API gateway and frontend are published; MongoDB, Kafka, auth, and user stay on the Docker network.
 
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM` in `.env` for verification and password-reset email delivery. Set `FRONTEND_URL` to the public frontend origin (for example `https://identity.example.com`) so email links resolve correctly. The local Compose stack can use the same SMTP variables.
+
 1. **Deploy (recommended)**:
 
 ```bash
@@ -175,7 +177,16 @@ The API documentation is organized by service:
 #### Authentication Service (`/api/auth`)
 
 - `POST /api/auth/login` - User login (sets session cookie)
-- `POST /api/auth/register` - User registration (sets session cookie)
+- `POST /api/auth/register` - Register and send an email verification link
+- `POST /api/auth/verify-email` - Verify email using a single-use link token
+- `POST /api/auth/verification/resend` - Resend email verification instructions
+- `POST /api/auth/password/forgot` - Request password reset instructions
+- `POST /api/auth/password/reset` - Reset password using a single-use link token
+- `POST /api/auth/password` - Change password while signed in
+- `DELETE /api/auth/account` - Delete the signed-in account after current-password confirmation
+- `PUT /api/auth/users/:id` - Admin profile and role update
+- `DELETE /api/auth/users/:id` - Admin customer deletion
+- `PUT /api/auth/users/:id/status` - Admin suspend/reactivate a customer account
 - `GET /api/auth/me` - Current session user ID
 - `POST /api/auth/logout` - Clear session cookie
 - `POST /api/auth/validate` - Validate session (cookie, body, or Bearer)
@@ -204,7 +215,8 @@ The API documentation is organized by service:
 1. **Auth Service** (Port 8081)
    - User authentication and registration
    - HttpOnly cookie session management (JWT stored in `access_token` cookie)
-   - Password validation
+   - Email verification, password reset/change, and account deletion
+   - Admin role and suspend/reactivate controls
 
 2. **User Service** (Port 8082)
    - User profile management
@@ -399,7 +411,7 @@ ng serve
 
 ### Authentication (via API Gateway)
 
-Login and register set an `access_token` HttpOnly cookie. Use `-c` / `-b` with curl to persist and send cookies.
+Login sets an `access_token` HttpOnly cookie after email verification. Registration sends a verification email and does not create a session. Use `-c` / `-b` with curl to persist and send cookies.
 
 ```bash
 # Login (saves cookie to cookies.txt)

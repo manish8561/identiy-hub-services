@@ -4,14 +4,15 @@ import "time"
 
 // User represents a user in the system
 type User struct {
-	ID        string    `json:"id" bson:"_id,omitempty"`
-	Name      string    `json:"name" bson:"name"`
-	Email     string    `json:"email" bson:"email"`
-	Password  string    `json:"-" bson:"password"`
-	Status    string    `json:"status" bson:"status"`
-	Role      string    `json:"role" bson:"role"`
-	CreatedAt time.Time `json:"createdAt" bson:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" bson:"updatedAt"`
+	ID            string    `json:"id" bson:"_id,omitempty"`
+	Name          string    `json:"name" bson:"name"`
+	Email         string    `json:"email" bson:"email"`
+	Password      string    `json:"-" bson:"password"`
+	Status        string    `json:"status" bson:"status"`
+	Role          string    `json:"role" bson:"role"`
+	EmailVerified *bool     `json:"emailVerified,omitempty" bson:"emailVerified,omitempty"`
+	CreatedAt     time.Time `json:"createdAt" bson:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" bson:"updatedAt"`
 }
 
 // UserListResponse represents a paginated list of users

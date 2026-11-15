@@ -97,7 +97,7 @@ func main() {
 	}()
 
 	// Setup routes using the router
-	r := router.NewRouter(userHandler, log, cfg.JWTSecret, cfg.AllowedOrigins)
+	r := router.NewRouterWithAccountStatus(userHandler, log, cfg.JWTSecret, cfg.AllowedOrigins, userService.AccountActive)
 
 	// Start the server
 	serverAddr := fmt.Sprintf(":%s", cfg.Port)

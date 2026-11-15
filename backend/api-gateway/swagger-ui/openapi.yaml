@@ -6,8 +6,9 @@ info:
 
         ## Authentication
 
-        Sessions use an HttpOnly cookie named `access_token` containing a JWT. Login and register
-        responses set this cookie via `Set-Cookie`. Protected endpoints accept the cookie automatically
+        Sessions use an HttpOnly cookie named `access_token` containing a JWT. Login
+        responses set this cookie via `Set-Cookie`; registration requires email verification.
+        Protected endpoints accept the cookie automatically
         in browsers; API clients may also use `Authorization: Bearer <token>` as a fallback.
 
         In Swagger UI, use the **cookieAuth** security scheme after logging in (browser sends cookie
@@ -202,7 +203,7 @@ paths:
             tags:
                 - Auth
             summary: User registration
-            description: Register a new user account
+            description: Register a new account and send an email verification link. No session is created until verification.
             requestBody:
                 required: true
                 content:
@@ -218,8 +219,64 @@ paths:
                                 $ref: '#/components/schemas/RegisterResponse'
                 "400":
                     description: Invalid input or registration failed
+                "500":
+                    description: Verification email delivery failed
                 "502":
                     description: Auth service unavailable
+
+    /api/auth/verify-email:
+        post:
+            tags: [Auth]
+            summary: Verify an email address
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ActionTokenRequest'
+            responses:
+                "200": { description: Email verified }
+                "400": { description: Token is invalid or expired }
+
+    /api/auth/verification/resend:
+        post:
+            tags: [Auth]
+            summary: Resend email verification instructions
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/EmailRequest'
+            responses:
+                "200": { description: Generic response to prevent account enumeration }
+
+    /api/auth/password/forgot:
+        post:
+            tags: [Auth]
+            summary: Request a password reset email
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/EmailRequest'
+            responses:
+                "200": { description: Generic response to prevent account enumeration }
+
+    /api/auth/password/reset:
+        post:
+            tags: [Auth]
+            summary: Reset a password using a single-use token
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ResetPasswordRequest'
+            responses:
+                "200": { description: Password reset and existing sessions revoked }
+                "400": { description: Token is invalid or expired, or request is invalid }
 
     /api/auth/validate:
         post:
@@ -299,6 +356,29 @@ paths:
                 "502":
                     description: Auth service unavailable
 
+    /api/auth/profile:
+        put:
+            tags: [Auth]
+            summary: Update the current user's name or email address
+            description: Changing email requires the current password, revokes sessions, and sends a new verification link.
+            security:
+                - cookieAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name, email]
+                            properties:
+                                name: { type: string, maxLength: 100 }
+                                email: { type: string, format: email }
+                                currentPassword: { type: string }
+            responses:
+                "200": { description: Profile updated }
+                "400": { description: Invalid profile or current password }
+                "401": { description: Authentication required }
+
     /api/auth/account:
         delete:
             tags:
@@ -309,6 +389,15 @@ paths:
             security:
                 - cookieAuth: []
                 - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [currentPassword]
+                            properties:
+                                currentPassword: { type: string }
             responses:
                 "200":
                     description: Account deleted and session cleared
@@ -325,10 +414,65 @@ paths:
                                         example: account deleted
                 "401":
                     description: Missing, invalid, or expired session token
+                "400":
+                    description: Current password is incorrect
                 "500":
                     description: Account deletion or deletion event publication failed
                 "502":
                     description: Auth service unavailable
+
+    /api/auth/users/{id}:
+        put:
+            tags: [Auth]
+            summary: Admin update of a customer's profile and role
+            security:
+                - cookieAuth: []
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string } }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdminUpdateUserRequest'
+            responses:
+                "200": { description: User updated and profile sync published }
+                "401": { description: Authentication required }
+                "403": { description: Admin role required }
+        delete:
+            tags: [Auth]
+            summary: Admin delete of a customer account
+            description: Revokes all sessions, deletes the auth account, and publishes the profile deletion event.
+            security:
+                - cookieAuth: []
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string } }
+            responses:
+                "200": { description: User deleted }
+                "401": { description: Authentication required }
+                "403": { description: Admin role required }
+
+    /api/auth/users/{id}/status:
+        put:
+            tags: [Auth]
+            summary: Suspend or reactivate a customer account
+            security:
+                - cookieAuth: []
+            parameters:
+                - { name: id, in: path, required: true, schema: { type: string } }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [status]
+                            properties:
+                                status: { type: string, enum: [active, suspended] }
+            responses:
+                "200": { description: Account status updated }
+                "401": { description: Authentication required }
+                "403": { description: Admin role required }
 
     /api/users/profile/me:
         get:
@@ -501,16 +645,37 @@ components:
                     description: Registration status
                 message:
                     type: string
-                    example: "User registered successfully"
+                    example: "Registration successful. Check your email to verify your account."
                     description: Registration result message
                 token:
                     type: string
                     example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     description: JWT issued for the new session
-            required:
-                - status
-                - message
-                - token
+            required: [status, message]
+        EmailRequest:
+            type: object
+            required: [email]
+            properties:
+                email: { type: string, format: email }
+        ActionTokenRequest:
+            type: object
+            required: [token]
+            properties:
+                token: { type: string }
+        ResetPasswordRequest:
+            type: object
+            required: [token, newPassword, confirmPassword]
+            properties:
+                token: { type: string }
+                newPassword: { type: string, minLength: 6, maxLength: 72 }
+                confirmPassword: { type: string }
+        AdminUpdateUserRequest:
+            type: object
+            required: [name, email, role]
+            properties:
+                name: { type: string, maxLength: 100 }
+                email: { type: string, format: email }
+                role: { type: string, enum: [customer, admin] }
         TokenValidationRequest:
             type: object
             properties:

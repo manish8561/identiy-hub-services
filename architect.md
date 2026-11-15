@@ -182,7 +182,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 1. ~~**Remove Kratos greeter / helloworld scaffold** from the API Gateway~~ — ✅ Done: removed the unused HTTP/gRPC greeter, generated proto code, and scaffold biz/data/service packages; the gateway now exposes only its HTTP health, Swagger, and proxy routes.
 2. ~~**Refresh docs**~~ — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
-3. **Auth / user product gaps** — Password change, roles UX, and richer account lifecycle beyond the current cookie session flows.
+3. ~~**Auth / user product gaps**~~ — ✅ Done: password change/reset, email verification, admin role editing and account suspend/reactivate, plus password-confirmed self-service account deletion are available through the UI and backend.
 4. ~~**User sessions collection**~~ — ✅ Done: `auth_db.user_sessions` records each issued cookie by JWT session ID, validates active sessions, revokes sessions on logout/refresh/account deletion, and expires old records through a MongoDB TTL index.
 
 ### Already in place (do not re-plan as greenfield)

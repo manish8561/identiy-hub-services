@@ -7,6 +7,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { AuthService, getAuthErrorMessage } from '../services/auth.service';
+import { Router } from '@angular/router';
 import {
   NotificationHistory,
   NotificationPreference,
@@ -26,6 +27,7 @@ export class ProfileComponent implements OnInit {
   user: UserProfile | null = null;
   profileForm: FormGroup;
   passwordForm: FormGroup;
+  accountDeleteForm: FormGroup;
   errorMessage = '';
   notificationError = '';
   preference?: NotificationPreference;
@@ -34,6 +36,8 @@ export class ProfileComponent implements OnInit {
   editingProfile = false;
   savingProfile = false;
   savingPassword = false;
+  confirmingAccountDeletion = false;
+  deletingAccount = false;
 
   get historyPageCount(): number {
     return this.history ? Math.ceil(this.history.total / this.history.size) : 0;
@@ -45,6 +49,7 @@ export class ProfileComponent implements OnInit {
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly toastService: ToastService,
+    private readonly router: Router,
   ) {
     this.profileForm = this.formBuilder.group({
       name: [
@@ -56,6 +61,7 @@ export class ProfileComponent implements OnInit {
         ],
       ],
       email: ['', [Validators.required, Validators.email]],
+      currentPassword: [''],
     });
     this.passwordForm = this.formBuilder.group(
       {
@@ -74,6 +80,9 @@ export class ProfileComponent implements OnInit {
             : { passwordMismatch: true },
       },
     );
+    this.accountDeleteForm = this.formBuilder.group({
+      currentPassword: ['', Validators.required],
+    });
   }
 
   ngOnInit(): void {
@@ -100,14 +109,22 @@ export class ProfileComponent implements OnInit {
     if (!this.user) {
       return;
     }
-    this.profileForm.reset({ name: this.user.name, email: this.user.email });
+    this.profileForm.reset({
+      name: this.user.name,
+      email: this.user.email,
+      currentPassword: '',
+    });
     this.editingProfile = true;
   }
 
   cancelEditingProfile(): void {
     this.editingProfile = false;
     if (this.user) {
-      this.profileForm.reset({ name: this.user.name, email: this.user.email });
+      this.profileForm.reset({
+        name: this.user.name,
+        email: this.user.email,
+        currentPassword: '',
+      });
     }
   }
 
@@ -120,24 +137,64 @@ export class ProfileComponent implements OnInit {
       return;
     }
 
+    const emailChanged =
+      this.profileForm.value.email.trim() !== this.user.email;
+    if (emailChanged && !this.profileForm.value.currentPassword) {
+      this.profileForm.controls['currentPassword'].markAsTouched();
+      return;
+    }
+
     this.savingProfile = true;
-    this.userService
-      .updateProfile(this.user.id, {
+    this.authService
+      .updateOwnProfile({
         name: this.profileForm.value.name.trim(),
         email: this.profileForm.value.email.trim(),
-        role: this.user.role ?? 'customer',
+        currentPassword: this.profileForm.value.currentPassword || undefined,
       })
       .subscribe({
-        next: (profile) => {
-          this.user = profile;
-          this.profileForm.reset({ name: profile.name, email: profile.email });
+        next: (response) => {
           this.editingProfile = false;
           this.savingProfile = false;
           this.authService.invalidateProfileCache();
+          if (response.verificationRequired) {
+            this.authService.clearSession();
+            this.toastService.success(
+              'Profile updated. Verify your new email address before signing in.',
+            );
+            this.router.navigate(['/login']);
+            return;
+          }
+          const updatedProfile = {
+            ...this.user!,
+            name: this.profileForm.value.name.trim(),
+            email: this.profileForm.value.email.trim(),
+          };
+          this.user = updatedProfile;
+          this.profileForm.reset({
+            name: this.user.name,
+            email: this.user.email,
+            currentPassword: '',
+          });
           this.toastService.success('Profile updated successfully.');
         },
         error: (error: unknown) => {
           this.savingProfile = false;
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'error' in error &&
+            typeof error.error === 'object' &&
+            error.error !== null &&
+            'verificationRequired' in error.error &&
+            error.error.verificationRequired === true
+          ) {
+            this.authService.clearSession();
+            this.toastService.error(
+              'Your email changed, but verification email delivery failed. Sign in later and resend verification.',
+            );
+            this.router.navigate(['/login']);
+            return;
+          }
           this.toastService.error(
             error instanceof Error
               ? error.message
@@ -170,6 +227,56 @@ export class ProfileComponent implements OnInit {
         );
       },
     });
+  }
+
+  resendVerification(): void {
+    if (!this.user) {
+      return;
+    }
+    this.authService.resendVerification(this.user.email).subscribe({
+      next: (response) =>
+        this.toastService.success(response.message ?? 'Verification email sent.'),
+      error: (error: unknown) =>
+        this.toastService.error(
+          getAuthErrorMessage(error, 'Could not resend the verification email.'),
+        ),
+    });
+  }
+
+  confirmAccountDeletion(): void {
+    this.confirmingAccountDeletion = true;
+    this.accountDeleteForm.reset();
+  }
+
+  cancelAccountDeletion(): void {
+    this.confirmingAccountDeletion = false;
+    this.accountDeleteForm.reset();
+  }
+
+  deleteAccount(): void {
+    if (this.deletingAccount) {
+      return;
+    }
+    if (this.accountDeleteForm.invalid) {
+      this.accountDeleteForm.markAllAsTouched();
+      return;
+    }
+    this.deletingAccount = true;
+    this.authService
+      .deleteAccount(this.accountDeleteForm.controls['currentPassword'].value ?? '')
+      .subscribe({
+        next: () => {
+          this.authService.clearSession();
+          this.toastService.success('Your account has been deleted.');
+          this.router.navigate(['/login']);
+        },
+        error: (error: unknown) => {
+          this.deletingAccount = false;
+          this.toastService.error(
+            getAuthErrorMessage(error, 'Could not delete your account.'),
+          );
+        },
+      });
   }
 
   loadNotifications(page = 1): void {

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,6 +17,41 @@ func signedToken(t *testing.T, secret string, claims jwt.MapClaims) string {
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 	assert.NoError(t, err)
 	return token
+}
+
+func TestCookieAuthChecksCurrentAccountStatus(t *testing.T) {
+	const secret = "test-secret"
+	token := signedToken(t, secret, jwt.MapClaims{
+		"user_id": "user-123",
+		"jti":     "session-123",
+		"exp":     time.Now().Add(time.Hour).Unix(),
+	})
+	tests := []struct {
+		name       string
+		checker    AccountStatusChecker
+		wantStatus int
+	}{
+		{name: "active", checker: func(userID, sessionID string) (bool, error) {
+			return userID == "user-123" && sessionID == "session-123", nil
+		}, wantStatus: http.StatusOK},
+		{name: "suspended or unverified", checker: func(string, string) (bool, error) { return false, nil }, wantStatus: http.StatusForbidden},
+		{name: "status lookup failure", checker: func(string, string) (bool, error) { return false, errors.New("database unavailable") }, wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			router := gin.New()
+			router.GET("/protected", CookieAuthWithAccountStatus(secret, tt.checker), func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
+			req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			assert.Equal(t, tt.wantStatus, response.Code)
+		})
+	}
 }
 
 func authRouter(secret string) *gin.Engine {
