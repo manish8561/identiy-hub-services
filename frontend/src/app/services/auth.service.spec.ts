@@ -58,4 +58,21 @@ describe('AuthService', () => {
       ),
     ).toBe('Email is already registered');
   });
+
+  it('sends authenticated password changes with the session cookie', () => {
+    const request = {
+      currentPassword: 'old-password',
+      newPassword: 'new-password',
+      confirmPassword: 'new-password',
+    };
+    service.changePassword(request).subscribe();
+
+    const httpRequest = httpTestingController.expectOne(
+      `${environment.apiUrl}/auth/password`,
+    );
+    expect(httpRequest.request.method).toBe('POST');
+    expect(httpRequest.request.body).toEqual(request);
+    expect(httpRequest.request.withCredentials).toBeTrue();
+    httpRequest.flush({ status: 'success', message: 'password changed' });
+  });
 });

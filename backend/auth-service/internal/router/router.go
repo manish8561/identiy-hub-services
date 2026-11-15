@@ -25,6 +25,7 @@ func NewRouter(authHandler *handlers.AuthHandler, log logger.Logger, allowedOrig
 		api.POST("/validate", authHandler.ValidateToken)
 		api.POST("/refresh", authHandler.RefreshToken)
 		api.GET("/me", authHandler.Me)
+		api.POST("/password", authHandler.ChangePassword)
 		api.DELETE("/account", authHandler.DeleteAccount)
 		api.POST("/logout", authHandler.Logout)
 	}

@@ -142,6 +142,103 @@
           </div>
         </div>
         <section
+          class="mt-8 rounded-lg bg-white p-6 shadow"
+          aria-labelledby="change-password-title"
+        >
+          <div class="mb-5">
+            <h2
+              id="change-password-title"
+              class="text-lg font-medium text-gray-900"
+            >
+              Change password
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+              Enter your current password and choose a new one.
+            </p>
+          </div>
+          <form
+            [formGroup]="passwordForm"
+            (ngSubmit)="changePassword()"
+            class="max-w-xl space-y-4"
+          >
+            <label class="block text-sm font-medium text-gray-700">
+              Current password
+              <input
+                type="password"
+                formControlName="currentPassword"
+                autocomplete="current-password"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                [attr.aria-invalid]="
+                  passwordForm.controls['currentPassword'].invalid &&
+                  passwordForm.controls['currentPassword'].touched
+                "
+              />
+              <span
+                *ngIf="
+                  passwordForm.controls['currentPassword'].invalid &&
+                  passwordForm.controls['currentPassword'].touched
+                "
+                class="mt-1 block text-sm text-red-700"
+              >
+                Enter your current password.
+              </span>
+            </label>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label class="block text-sm font-medium text-gray-700">
+                New password
+                <input
+                  type="password"
+                  formControlName="newPassword"
+                  autocomplete="new-password"
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                  [attr.aria-invalid]="
+                    passwordForm.controls['newPassword'].invalid &&
+                    passwordForm.controls['newPassword'].touched
+                  "
+                />
+                <span
+                  *ngIf="
+                    passwordForm.controls['newPassword'].invalid &&
+                    passwordForm.controls['newPassword'].touched
+                  "
+                  class="mt-1 block text-sm text-red-700"
+                >
+                  Use 6 to 72 characters for the new password.
+                </span>
+              </label>
+              <label class="block text-sm font-medium text-gray-700">
+                Confirm new password
+                <input
+                  type="password"
+                  formControlName="confirmPassword"
+                  autocomplete="new-password"
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-emerald-600 focus:outline-none focus:ring-emerald-600"
+                  [attr.aria-invalid]="
+                    passwordForm.hasError('passwordMismatch') &&
+                    passwordForm.controls['confirmPassword'].touched
+                  "
+                />
+                <span
+                  *ngIf="
+                    passwordForm.hasError('passwordMismatch') &&
+                    passwordForm.controls['confirmPassword'].touched
+                  "
+                  class="mt-1 block text-sm text-red-700"
+                >
+                  Passwords do not match.
+                </span>
+              </label>
+            </div>
+            <button
+              type="submit"
+              [disabled]="savingPassword"
+              class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {{ savingPassword ? "Changing..." : "Change password" }}
+            </button>
+          </form>
+        </section>
+        <section
           class="mt-8 bg-white shadow rounded-lg p-6"
           aria-labelledby="notification-settings-title"
         >

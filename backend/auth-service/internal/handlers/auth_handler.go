@@ -202,6 +202,40 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// ChangePassword updates the authenticated user's password.
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token := h.extractToken(c)
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.authService.ChangePassword(token, req.CurrentPassword, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, services.ErrInvalidCurrentPassword):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrInvalidSession):
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		case errors.Is(err, services.ErrPasswordUnchanged), errors.Is(err, services.ErrPasswordTooLong):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case isSessionStoreError(err):
+			h.logger.Error("Failed to revoke other sessions after password change", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "password changed but failed to revoke other sessions"})
+		default:
+			h.logger.Error("Failed to change password", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "password changed"})
+}
+
 // DeleteAccount removes the account associated with the current session.
 func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	token := h.extractToken(c)

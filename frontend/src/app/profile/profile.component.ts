@@ -6,7 +6,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { AuthService } from '../services/auth.service';
+import { AuthService, getAuthErrorMessage } from '../services/auth.service';
 import {
   NotificationHistory,
   NotificationPreference,
@@ -25,6 +25,7 @@ import { UserProfile, UserService } from '../services/user.service';
 export class ProfileComponent implements OnInit {
   user: UserProfile | null = null;
   profileForm: FormGroup;
+  passwordForm: FormGroup;
   errorMessage = '';
   notificationError = '';
   preference?: NotificationPreference;
@@ -32,6 +33,7 @@ export class ProfileComponent implements OnInit {
   savingPreference = false;
   editingProfile = false;
   savingProfile = false;
+  savingPassword = false;
 
   get historyPageCount(): number {
     return this.history ? Math.ceil(this.history.total / this.history.size) : 0;
@@ -55,6 +57,23 @@ export class ProfileComponent implements OnInit {
       ],
       email: ['', [Validators.required, Validators.email]],
     });
+    this.passwordForm = this.formBuilder.group(
+      {
+        currentPassword: ['', Validators.required],
+        newPassword: [
+          '',
+          [Validators.required, Validators.minLength(6), Validators.maxLength(72)],
+        ],
+        confirmPassword: ['', Validators.required],
+      },
+      {
+        validators: (group) =>
+          group.get('newPassword')?.value ===
+          group.get('confirmPassword')?.value
+            ? null
+            : { passwordMismatch: true },
+      },
+    );
   }
 
   ngOnInit(): void {
@@ -126,6 +145,31 @@ export class ProfileComponent implements OnInit {
           );
         },
       });
+  }
+
+  changePassword(): void {
+    if (this.savingPassword) {
+      return;
+    }
+    if (this.passwordForm.invalid) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+
+    this.savingPassword = true;
+    this.authService.changePassword(this.passwordForm.getRawValue()).subscribe({
+      next: () => {
+        this.passwordForm.reset();
+        this.savingPassword = false;
+        this.toastService.success('Password changed successfully.');
+      },
+      error: (error: unknown) => {
+        this.savingPassword = false;
+        this.toastService.error(
+          getAuthErrorMessage(error, 'Could not change your password.'),
+        );
+      },
+    });
   }
 
   loadNotifications(page = 1): void {

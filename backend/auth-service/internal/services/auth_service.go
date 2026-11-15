@@ -22,6 +22,13 @@ type AuthService struct {
 	publisher   UserEventPublisher
 }
 
+var (
+	ErrInvalidCurrentPassword = errors.New("current password is incorrect")
+	ErrInvalidSession         = errors.New("invalid session")
+	ErrPasswordUnchanged      = errors.New("new password must be different from the current password")
+	ErrPasswordTooLong        = errors.New("new password exceeds the maximum supported length")
+)
+
 // UserEventPublisher publishes user lifecycle events.
 type UserEventPublisher interface {
 	PublishUserCreated(ctx context.Context, event models.UserEvent) error
@@ -82,6 +89,66 @@ func (s *AuthService) Login(email, plainPassword string) (*models.LoginResponse,
 		Status: "success",
 		Token:  token,
 	}, nil
+}
+
+// ChangePassword verifies the active session and current password before replacing
+// the stored password. Other active sessions are revoked while this session remains valid.
+func (s *AuthService) ChangePassword(tokenString, currentPassword, newPassword string) error {
+	if len([]byte(newPassword)) > 72 {
+		return ErrPasswordTooLong
+	}
+
+	claims, active, err := s.validateActiveToken(tokenString)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return ErrInvalidSession
+	}
+
+	collection := s.mongoConfig.GetCollection("auth_users")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var user models.User
+	err = collection.FindOne(ctx, bson.M{"_id": claims.UserID}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrInvalidCurrentPassword
+		}
+		return fmt.Errorf("load user for password change: %w", err)
+	}
+
+	matches, _ := password.Check(user.Password, currentPassword)
+	if !matches {
+		return ErrInvalidCurrentPassword
+	}
+	if currentPassword == newPassword {
+		return ErrPasswordUnchanged
+	}
+
+	hashedPassword, err := password.Hash(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash new password: %w", err)
+	}
+	result, err := collection.UpdateOne(ctx, bson.M{
+		"_id":      user.ID,
+		"password": user.Password,
+	}, bson.M{"$set": bson.M{
+		"password":  hashedPassword,
+		"updatedAt": time.Now(),
+	}})
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return ErrInvalidCurrentPassword
+	}
+	if err := s.sessions.RevokeAllExcept(ctx, claims.UserID, claims.ID, time.Now()); err != nil {
+		return &SessionStoreError{Operation: "revoke other sessions after password change", Err: err}
+	}
+
+	return nil
 }
 
 // Register creates a new user account with the provided registration details.

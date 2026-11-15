@@ -20,6 +20,7 @@ type SessionStore interface {
 	IsActive(ctx context.Context, sessionID, userID string, now time.Time) (bool, error)
 	Revoke(ctx context.Context, sessionID, userID string, revokedAt time.Time) error
 	RevokeAll(ctx context.Context, userID string, revokedAt time.Time) error
+	RevokeAllExcept(ctx context.Context, userID, exceptSessionID string, revokedAt time.Time) error
 }
 
 // SessionStoreError identifies a failure that prevented a session persistence operation.
@@ -124,6 +125,21 @@ func (s *MongoSessionStore) RevokeAll(ctx context.Context, userID string, revoke
 	}, bson.M{"$set": bson.M{"revokedAt": revokedAt}})
 	if err != nil {
 		return fmt.Errorf("revoke user sessions: %w", err)
+	}
+	return nil
+}
+
+func (s *MongoSessionStore) RevokeAllExcept(ctx context.Context, userID, exceptSessionID string, revokedAt time.Time) error {
+	if s == nil || s.collection == nil {
+		return fmt.Errorf("revoke other user sessions: MongoDB collection is not configured")
+	}
+	_, err := s.collection.UpdateMany(ctx, bson.M{
+		"userId":    userID,
+		"_id":       bson.M{"$ne": exceptSessionID},
+		"revokedAt": bson.M{"$exists": false},
+	}, bson.M{"$set": bson.M{"revokedAt": revokedAt}})
+	if err != nil {
+		return fmt.Errorf("revoke other user sessions: %w", err)
 	}
 	return nil
 }

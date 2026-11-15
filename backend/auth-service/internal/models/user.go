@@ -43,6 +43,13 @@ type RegisterRequest struct {
 	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=Password"`
 }
 
+// ChangePasswordRequest represents an authenticated password change request.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" binding:"required"`
+	NewPassword     string `json:"newPassword" binding:"required,min=6,max=72"`
+	ConfirmPassword string `json:"confirmPassword" binding:"required,eqfield=NewPassword"`
+}
+
 // RegisterResponse represents a registration response.
 type RegisterResponse struct {
 	Status  string `json:"status"`

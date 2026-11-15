@@ -51,6 +51,10 @@ func (acceptingSessionStore) RevokeAll(context.Context, string, time.Time) error
 	return nil
 }
 
+func (acceptingSessionStore) RevokeAllExcept(context.Context, string, string, time.Time) error {
+	return nil
+}
+
 type failingSessionStore struct{}
 
 func (failingSessionStore) Create(context.Context, models.UserSession) error {
@@ -66,6 +70,10 @@ func (failingSessionStore) Revoke(context.Context, string, string, time.Time) er
 }
 
 func (failingSessionStore) RevokeAll(context.Context, string, time.Time) error {
+	return errors.New("database unavailable")
+}
+
+func (failingSessionStore) RevokeAllExcept(context.Context, string, string, time.Time) error {
 	return errors.New("database unavailable")
 }
 
@@ -243,6 +251,27 @@ func TestAuthHandlerMeReturnsUserFromAuthorizationHeader(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, response.Code)
 	assert.JSONEq(t, `{"status":"success","user_id":"header-user"}`, response.Body.String())
+}
+
+func TestAuthHandlerChangePasswordRequiresValidRequestAndSession(t *testing.T) {
+	r, _, _ := setupAuthRouter(t)
+
+	for _, testCase := range []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{name: "missing fields", body: `{}`, wantStatus: http.StatusBadRequest},
+		{name: "missing session", body: `{"currentPassword":"old-password","newPassword":"new-password","confirmPassword":"new-password"}`, wantStatus: http.StatusUnauthorized},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/password", bytes.NewBufferString(testCase.body))
+			req.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			r.ServeHTTP(response, req)
+			assert.Equal(t, testCase.wantStatus, response.Code)
+		})
+	}
 }
 
 func TestAuthHandlerRefreshTokenUsesCookieWhenNoAuthorizationHeader(t *testing.T) {

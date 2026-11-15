@@ -21,12 +21,14 @@ describe('ProfileComponent', () => {
   const authService = {
     getProfile: () => of(profile),
     invalidateProfileCache: jasmine.createSpy(),
+    changePassword: jasmine.createSpy().and.returnValue(of({ status: 'success' })),
   };
   const userService = {
     updateProfile: jasmine.createSpy().and.returnValue(of(profile)),
   };
   beforeEach(async () => {
     authService.invalidateProfileCache.calls.reset();
+    authService.changePassword.calls.reset();
     userService.updateProfile.calls.reset();
 
     await TestBed.configureTestingModule({
@@ -79,6 +81,39 @@ describe('ProfileComponent', () => {
     });
     expect(authService.invalidateProfileCache).toHaveBeenCalled();
     expect(component.editingProfile).toBeFalse();
+  });
+
+  it('changes the authenticated user password', () => {
+    component.passwordForm.setValue({
+      currentPassword: 'old-password',
+      newPassword: 'new-password',
+      confirmPassword: 'new-password',
+    });
+
+    component.changePassword();
+
+    expect(authService.changePassword).toHaveBeenCalledWith({
+      currentPassword: 'old-password',
+      newPassword: 'new-password',
+      confirmPassword: 'new-password',
+    });
+    expect(component.passwordForm.value).toEqual({
+      currentPassword: null,
+      newPassword: null,
+      confirmPassword: null,
+    });
+  });
+
+  it('does not submit a password change when the confirmation differs', () => {
+    component.passwordForm.setValue({
+      currentPassword: 'old-password',
+      newPassword: 'new-password',
+      confirmPassword: 'different-password',
+    });
+
+    component.changePassword();
+
+    expect(authService.changePassword).not.toHaveBeenCalled();
   });
 
   it('does not expose account deletion to an admin', () => {

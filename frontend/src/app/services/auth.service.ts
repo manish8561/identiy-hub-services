@@ -16,6 +16,12 @@ export interface RegisterRequest {
   confirmPassword: string;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export interface AuthResponse {
   status: string;
   message?: string;
@@ -97,6 +103,14 @@ export class AuthService {
         this.httpOptions,
       )
       .pipe(tap((response) => this.setAuthenticated(response)));
+  }
+
+  changePassword(request: ChangePasswordRequest): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(
+      `${this.apiUrl}/auth/password`,
+      request,
+      this.httpOptions,
+    );
   }
 
   logout(): Observable<AuthResponse> {

@@ -271,6 +271,34 @@ paths:
                 "502":
                     description: Auth service unavailable
 
+    /api/auth/password:
+        post:
+            tags:
+                - Auth
+            summary: Change the current user's password
+            description: Verify the current password, update the password hash, and revoke other active sessions.
+            operationId: AuthService_ChangePassword
+            security:
+                - cookieAuth: []
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChangePasswordRequest'
+            responses:
+                "200":
+                    description: Password changed successfully
+                "400":
+                    description: Invalid request, incorrect current password, or new password matches the current password
+                "401":
+                    description: Missing, invalid, or expired session
+                "500":
+                    description: Password change or session revocation failed
+                "502":
+                    description: Auth service unavailable
+
     /api/auth/account:
         delete:
             tags:
@@ -445,6 +473,24 @@ components:
                 - name
                 - email
                 - password
+                - confirmPassword
+        ChangePasswordRequest:
+            type: object
+            properties:
+                currentPassword:
+                    type: string
+                    description: Current password for verification
+                newPassword:
+                    type: string
+                    minLength: 6
+                    maxLength: 72
+                    description: New password
+                confirmPassword:
+                    type: string
+                    description: Must match newPassword
+            required:
+                - currentPassword
+                - newPassword
                 - confirmPassword
         RegisterResponse:
             type: object

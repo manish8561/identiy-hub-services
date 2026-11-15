@@ -268,3 +268,13 @@ func (s *testSessionStore) RevokeAll(_ context.Context, userID string, revokedAt
 	}
 	return nil
 }
+
+func (s *testSessionStore) RevokeAllExcept(_ context.Context, userID, exceptSessionID string, revokedAt time.Time) error {
+	for id, session := range s.sessions {
+		if id != exceptSessionID && session.UserID == userID && session.RevokedAt == nil {
+			session.RevokedAt = &revokedAt
+			s.sessions[id] = session
+		}
+	}
+	return nil
+}
