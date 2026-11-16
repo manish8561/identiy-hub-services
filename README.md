@@ -200,6 +200,18 @@ The API documentation is organized by service:
 - `PUT /api/users/profile/:id` - Update user profile
 - `DELETE /api/users/profile/:id` - Delete user profile
 
+### Account lifecycle
+
+The authentication service and Angular app support the full account lifecycle:
+
+- **Registration and email verification**: New accounts are created unverified. Registration sends a verification link and does not sign the user in; login is available after verification. Users can request another verification email from the login page.
+- **Password recovery**: Users can request a password-reset link from the login page. Reset and verification links use single-use tokens stored as hashes and expire automatically (30 minutes for password reset; 24 hours for verification). Password resets revoke the user's active sessions.
+- **Profile and account controls**: Users can change their name and email from their profile. Changing an email requires the current password, triggers verification of the new address, and revokes existing sessions. Account deletion requires the current password and removes the authentication account and synchronized profile.
+- **Administrator controls**: Admins can view and edit user profiles and roles, suspend or reactivate customer accounts, and delete customer accounts. Role changes and suspensions revoke active sessions. Admins cannot manage their own account, suspend or delete other admins, or demote the last active administrator.
+- **Immediate access enforcement**: Protected user-service requests check the synchronized account state and active session, so suspension, email-verification requirements, and session revocation apply without waiting solely for Kafka synchronization.
+
+Verification and password-reset email delivery requires SMTP configuration. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM`, and configure `FRONTEND_URL` with the public frontend origin. See [.env.example](.env.example) for the available settings.
+
 ### Why Centralized Documentation?
 
 1. **Single Source of Truth**: All API documentation in one place
@@ -698,6 +710,7 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 
 - **Microservices Architecture**: Scalable and maintainable service decomposition
 - **User Authentication**: HttpOnly cookie session (JWT in `access_token` cookie)
+- **Account Lifecycle**: Email verification, password reset, profile email re-verification, self-service deletion, and admin account controls
 - **User Management**: Complete CRUD operations for user profiles
 - **API Gateway**: Single entry point with routing and middleware
 - **MongoDB Integration**: Service-owned databases with event-driven sync

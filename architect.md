@@ -13,14 +13,14 @@ flowchart LR
 
     subgraph Backend[Backend Services]
         GW[API Gateway\nlocalhost:8080\nRoutes + CORS + Swagger]
-        AS[Auth Service\nlocalhost:8081\nLogin / Register / Validate]
+        AS[Auth Service\nlocalhost:8081\nAccounts / Sessions / Lifecycle]
         US[User Service\nlocalhost:8082\nProfile CRUD]
         NS[Notification Service\nlocalhost:8083\nPreferences + Email Delivery]
         KAFKA[Kafka\nUser lifecycle events]
     end
 
     subgraph Data[Data Stores]
-        AUTHDB[(MongoDB\nauth_db\n auth_users + user_sessions)]
+        AUTHDB[(MongoDB\nauth_db\n auth_users + user_sessions + auth_action_tokens)]
         USERDB[(MongoDB\nuser_db)]
         NOTIFYDB[(MongoDB\nnotification_db)]
     end
@@ -39,12 +39,13 @@ flowchart LR
     AS -->|Publish user.created.v1| KAFKA
     AS -->|Publish user.updated.v1| KAFKA
     AS -->|Publish user.deleted.v1| KAFKA
+    AS -->|Verification / reset email| SMTP[SMTP Provider]
 
     KAFKA -->|Consume user lifecycle events| US
     US -->|Read / write user profiles| USERDB
     KAFKA -->|user.created.v1| NS
     NS -->|Persist preferences and delivery history| NOTIFYDB
-    NS -->|SMTP welcome email| EMAIL[Email provider]
+    NS -->|SMTP welcome email| SMTP
 
     US -->|Return profile data| FE
     AS -->|Return auth result / cookie| FE
@@ -115,15 +116,20 @@ flowchart TD
 ### Auth Service
 
 - Handles registration, login, logout, and refresh
-- Validates credentials against MongoDB
+- Creates new accounts as unverified, sends verification links, and rejects login until email verification
+- Issues single-use email-verification and password-reset tokens; stores only token hashes and expires them using MongoDB TTL
+- Supports password reset/change, email re-verification, self-service account deletion, and admin account controls
+- Validates credentials and account status against MongoDB
 - Creates JWTs backed by revocable `user_sessions` records
-- Validates session activity and revokes sessions on logout, refresh, and account deletion
+- Validates session activity and revokes sessions on logout, refresh, password reset, email or role change, suspension, and account deletion
 - Emits user lifecycle events to Kafka
+- Sends verification and password-reset mail through the configured SMTP provider
 
 ### User Service
 
 - Owns user profile state in `user_db`
 - Consumes Kafka events to keep profiles synchronized
+- Checks the synchronized verification/account status and active auth session on protected requests
 - Enforces that users only access their own profile data
 
 ### Notification Service
@@ -137,13 +143,16 @@ flowchart TD
 
 - `auth_db.auth_users`: authentication records
 - `auth_db.user_sessions`: one revocable session record per issued cookie; stores session metadata, not the JWT
+- `auth_db.auth_action_tokens`: hashed, single-use verification and password-reset tokens with expiration
 - `user_db.user_profiles`: synced profile data
 - `notification_db.notification_preferences`: per-user email preference
 - `notification_db.notification_records`: delivery history and outcomes
 
 ## Operational notes
 
-- Browser sessions use HttpOnly cookies; no token is stored in localStorage. Each cookie maps to an active `auth_db.user_sessions` record until logout, refresh, account deletion, or expiration.
+- Browser sessions use HttpOnly cookies; no token is stored in localStorage. Each cookie maps to an active `auth_db.user_sessions` record until logout, refresh, a security-sensitive account change, or expiration.
+- Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM` for account verification and password-reset emails; `FRONTEND_URL` defines the public origin used in email links.
+- Admin role/status changes and account deletions are applied in Auth Service and propagated to user profiles through Kafka. User Service also checks active account/session state on protected requests.
 - Kafka keeps the services loosely coupled and resilient to async propagation
 - The gateway acts as the single public interface for client traffic
 - The backend supports both local containerized runs and production deployment via Docker Compose and the `deploy.sh` helper
@@ -154,7 +163,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P0 — Security and correctness
 
-1. ~~**Auth-side account delete**~~ —  ✅Done `user.deleted.v1` publishing exists, but auth does not delete accounts or emit deletes; user-service delete only removes profiles. Add a full account-deletion path from auth.
+1. ~~**Auth-side account delete**~~ — ✅ Done: self-service deletion requires the current password, revokes sessions, deletes the auth account, and publishes `user.deleted.v1` to remove the synchronized profile. Admins can also delete customer accounts.
 2. ~~**Production cookie / TLS settings**~~ — ✅ Done: `COOKIE_SECURE=true` and `COOKIE_SAME_SITE=None` are now the production defaults (compose, `.env`, `deploy.sh`). `NewCookieConfig` enforces `Secure=true` whenever `SameSite=None` (RFC 6265bis).
 
 ### P1 — Reliability and quality
@@ -182,7 +191,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 1. ~~**Remove Kratos greeter / helloworld scaffold** from the API Gateway~~ — ✅ Done: removed the unused HTTP/gRPC greeter, generated proto code, and scaffold biz/data/service packages; the gateway now exposes only its HTTP health, Swagger, and proxy routes.
 2. ~~**Refresh docs**~~ — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
-3. ~~**Auth / user product gaps**~~ — ✅ Done: password change/reset, email verification, admin role editing and account suspend/reactivate, plus password-confirmed self-service account deletion are available through the UI and backend.
+3. ~~**Auth / user product gaps**~~ — ✅ Done: password change/reset, email verification, profile email re-verification, password-confirmed self-service account deletion, and admin role/status/deletion controls are available through the UI and backend.
 4. ~~**User sessions collection**~~ — ✅ Done: `auth_db.user_sessions` records each issued cookie by JWT session ID, validates active sessions, revokes sessions on logout/refresh/account deletion, and expires old records through a MongoDB TTL index.
 
 ### Already in place (do not re-plan as greenfield)
