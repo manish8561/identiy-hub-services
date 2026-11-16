@@ -42,7 +42,7 @@ func main() {
 	email := services.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.EmailFrom)
 	notificationService := services.NewNotificationService(repository, email)
 	handler := handlers.NewNotificationHandler(notificationService)
-	consumer, err := services.NewEventConsumer(cfg.KafkaBrokers, cfg.KafkaGroupID, cfg.KafkaClientID, cfg.TopicUserCreated, notificationService, logger)
+	consumer, err := services.NewEventConsumer(cfg.KafkaBrokers, cfg.KafkaGroupID, cfg.KafkaClientID, cfg.TopicUserCreated, cfg.KafkaDLQTopic, notificationService, logger)
 	if err != nil {
 		logger.Fatal("failed to initialize Kafka consumer", zap.Error(err))
 	}

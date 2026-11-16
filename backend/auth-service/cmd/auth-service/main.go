@@ -105,6 +105,11 @@ func main() {
 		log.Error("Failed to initialize account action token indexes", zap.Error(err))
 		os.Exit(1)
 	}
+	if err := authService.EnsurePendingLifecycleEventIndex(indexCtx); err != nil {
+		cancelIndex()
+		log.Error("Failed to initialize pending lifecycle event index", zap.Error(err))
+		os.Exit(1)
+	}
 	if err := authService.EnsureEmailVerificationDefaults(indexCtx); err != nil {
 		cancelIndex()
 		log.Error("Failed to initialize legacy account verification defaults", zap.Error(err))
@@ -113,6 +118,27 @@ func main() {
 	cancelIndex()
 	authHandler := handlers.NewAuthHandler(authService, log, cookieConfig)
 	log.Info("Auth service and handlers initialized")
+
+	reconcileCtx, cancelReconcile := context.WithCancel(context.Background())
+	defer cancelReconcile()
+	if userEventPublisher != nil {
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for {
+				passCtx, cancel := context.WithTimeout(reconcileCtx, 10*time.Second)
+				if err := authService.PublishPendingUserCreatedEvents(passCtx); err != nil {
+					log.Error("Failed to reconcile pending registration events", zap.Error(err))
+				}
+				cancel()
+				select {
+				case <-reconcileCtx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
 
 	// Setup routes using the router
 	r := router.NewRouter(authHandler, log, cfg.AllowedOrigins)
@@ -132,5 +158,6 @@ func main() {
 	}()
 
 	<-quit
+	cancelReconcile()
 	log.Info("Shutting down auth service...")
 }

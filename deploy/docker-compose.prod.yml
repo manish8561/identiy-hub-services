@@ -109,6 +109,7 @@ services:
       - KAFKA_TOPIC_USER_CREATED=user.created.v1
       - KAFKA_TOPIC_USER_UPDATED=user.updated.v1
       - KAFKA_TOPIC_USER_DELETED=user.deleted.v1
+      - KAFKA_DLQ_TOPIC=user.events.user-service.dlq
       - GIN_MODE=release
       - LOG_LEVEL=${LOG_LEVEL:-0}
     depends_on:
@@ -143,6 +144,7 @@ services:
       - KAFKA_GROUP_ID=notification-service-group
       - KAFKA_CLIENT_ID=notification-service
       - KAFKA_TOPIC_USER_CREATED=user.created.v1
+      - KAFKA_DLQ_TOPIC=user.events.notification-service.dlq
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-}

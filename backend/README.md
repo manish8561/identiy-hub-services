@@ -69,6 +69,12 @@ Admin accounts must be provisioned through a trusted operational process; users 
 - **Action tokens**: `auth_db.auth_action_tokens` stores only SHA-256 token hashes, with TTL expiry; verification links expire after 24 hours and password-reset links after 30 minutes. Tokens are single-use.
 - **Notification database**: `notification_db.notification_preferences` and `notification_db.notification_records`
 
+### Kafka delivery and recovery
+
+The user and notification consumers retry failed event processing up to five times with exponential backoff (1, 2, 4, then 8 seconds). After the final failure they publish the original payload to their configured dead-letter topic (`KAFKA_DLQ_TOPIC`, defaulting to `user.events.user-service.dlq` or `user.events.notification-service.dlq`) with source offset and failure metadata. The source offset is committed only after successful processing or successful DLQ publication; if the DLQ is unavailable, the source event remains eligible for redelivery.
+
+Registration stores its `user.created.v1` event alongside the new account in `auth_db.auth_users`. Auth-service periodically publishes pending events and clears the stored event only after Kafka acknowledges it, so a broker outage does not lose a successful registration's synchronization event. Publication is at-least-once; downstream consumers should continue to handle duplicate event IDs idempotently.
+
 ## Authentication
 
 Sessions use an **HttpOnly cookie** named `access_token` containing a JWT. The browser sends this cookie automatically on subsequent requests; the frontend does not store tokens in `localStorage`.

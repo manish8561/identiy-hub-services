@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 	"user-service/internal/models"
 
 	"github.com/segmentio/kafka-go"
@@ -25,10 +26,13 @@ func NewKafkaPublisher(brokers, clientID, createdTopic, updatedTopic, deletedTop
 	}
 
 	writer := &kafka.Writer{
-		Addr:         kafka.TCP(parsedBrokers...),
-		Balancer:     &kafka.LeastBytes{},
-		RequiredAcks: kafka.RequireAll,
-		Async:        false,
+		Addr:            kafka.TCP(parsedBrokers...),
+		Balancer:        &kafka.LeastBytes{},
+		RequiredAcks:    kafka.RequireAll,
+		Async:           false,
+		MaxAttempts:     5,
+		WriteBackoffMin: 250 * time.Millisecond,
+		WriteBackoffMax: 2 * time.Second,
 		Transport: &kafka.Transport{
 			ClientID: clientID,
 		},
@@ -43,8 +47,11 @@ func NewKafkaPublisher(brokers, clientID, createdTopic, updatedTopic, deletedTop
 }
 
 func (p *KafkaPublisher) publish(ctx context.Context, topic string, event models.UserEvent) error {
-	if p == nil || p.writer == nil || topic == "" {
-		return nil
+	if p == nil || p.writer == nil {
+		return fmt.Errorf("publish user event: Kafka publisher is not configured")
+	}
+	if topic == "" {
+		return fmt.Errorf("publish user event: Kafka topic is not configured")
 	}
 
 	payload, err := json.Marshal(event)

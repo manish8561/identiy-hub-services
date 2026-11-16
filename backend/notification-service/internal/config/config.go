@@ -14,6 +14,7 @@ type Config struct {
 	KafkaGroupID     string
 	KafkaClientID    string
 	TopicUserCreated string
+	KafkaDLQTopic    string
 	SMTPHost         string
 	SMTPPort         string
 	SMTPUsername     string
@@ -32,6 +33,7 @@ func Load() Config {
 		KafkaGroupID:     env("KAFKA_GROUP_ID", "notification-service-group"),
 		KafkaClientID:    env("KAFKA_CLIENT_ID", "notification-service"),
 		TopicUserCreated: env("KAFKA_TOPIC_USER_CREATED", "user.created.v1"),
+		KafkaDLQTopic:    env("KAFKA_DLQ_TOPIC", "user.events.notification-service.dlq"),
 		SMTPHost:         env("SMTP_HOST", ""),
 		SMTPPort:         env("SMTP_PORT", "587"),
 		SMTPUsername:     env("SMTP_USERNAME", ""),

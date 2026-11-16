@@ -17,6 +17,7 @@ type Config struct {
 	KafkaTopicUserCreated string
 	KafkaTopicUserUpdated string
 	KafkaTopicUserDeleted string
+	KafkaDLQTopic         string
 	AllowedOrigins        []string
 }
 
@@ -33,6 +34,7 @@ func LoadConfig() *Config {
 		KafkaTopicUserCreated: getEnv("KAFKA_TOPIC_USER_CREATED", "user.created.v1"),
 		KafkaTopicUserUpdated: getEnv("KAFKA_TOPIC_USER_UPDATED", "user.updated.v1"),
 		KafkaTopicUserDeleted: getEnv("KAFKA_TOPIC_USER_DELETED", "user.deleted.v1"),
+		KafkaDLQTopic:         getEnv("KAFKA_DLQ_TOPIC", "user.events.user-service.dlq"),
 		AllowedOrigins:        splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:8085")),
 	}
 }

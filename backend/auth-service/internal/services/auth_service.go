@@ -5,6 +5,7 @@ import (
 	"auth-service/internal/models"
 	"auth-service/internal/password"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // AuthService handles authentication-related business logic
@@ -34,6 +36,8 @@ var (
 	ErrInvalidActionToken     = errors.New("invalid or expired action token")
 	ErrForbidden              = errors.New("forbidden")
 )
+
+const pendingLifecycleEventField = "pendingLifecycleEvent"
 
 // UserEventPublisher publishes user lifecycle events.
 type UserEventPublisher interface {
@@ -218,12 +222,6 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		UpdatedAt:     time.Now(),
 	}
 
-	// Insert user into database
-	_, err = collection.InsertOne(ctx, newUser)
-	if err != nil {
-		return nil, err
-	}
-
 	event := models.UserEvent{
 		EventID:       primitive.NewObjectID().Hex(),
 		EventType:     models.EventTypeUserCreated,
@@ -235,12 +233,14 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		Role:          newUser.Role,
 		EmailVerified: boolPointer(newUser.EmailVerified),
 	}
-
-	if s.publisher != nil {
-		if err := s.publisher.PublishUserCreated(ctx, event); err != nil {
-			// Registration should succeed even if async sync event publishing fails.
-			// Retry/reconciliation can handle eventual consistency.
-		}
+	registrationDocument, err := registrationUserDocument(newUser, event)
+	if err != nil {
+		return nil, err
+	}
+	// Store the event with the account so publication can be reconciled after process or broker failure.
+	_, err = collection.InsertOne(ctx, registrationDocument)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.issueActionEmail(ctx, newUser, actionTokenEmailVerification); err != nil {
@@ -251,6 +251,89 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		Status:  "success",
 		Message: "Registration successful. Check your email to verify your account.",
 	}, nil
+}
+
+func registrationUserDocument(user models.User, event models.UserEvent) (bson.M, error) {
+	eventPayload, err := json.Marshal(event)
+	if err != nil {
+		return nil, fmt.Errorf("encode registration event: %w", err)
+	}
+	return bson.M{
+		"_id":                      user.ID,
+		"name":                     user.Name,
+		"email":                    user.Email,
+		"password":                 user.Password,
+		"status":                   user.Status,
+		"role":                     user.Role,
+		"emailVerified":            user.EmailVerified,
+		"createdAt":                user.CreatedAt,
+		"updatedAt":                user.UpdatedAt,
+		pendingLifecycleEventField: string(eventPayload),
+	}, nil
+}
+
+// EnsurePendingLifecycleEventIndex keeps reconciliation scans bounded to pending records.
+func (s *AuthService) EnsurePendingLifecycleEventIndex(ctx context.Context) error {
+	_, err := s.mongoConfig.GetCollection("auth_users").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: pendingLifecycleEventField, Value: 1}},
+		Options: options.Index().SetSparse(true).SetName("pending_lifecycle_event"),
+	})
+	if err != nil {
+		return fmt.Errorf("create pending lifecycle event index: %w", err)
+	}
+	return nil
+}
+
+// PublishPendingUserCreatedEvents retries durable registration events and clears them only
+// after Kafka acknowledges publication.
+func (s *AuthService) PublishPendingUserCreatedEvents(ctx context.Context) error {
+	if s.publisher == nil {
+		return errors.New("user lifecycle publisher is not configured")
+	}
+	users := s.mongoConfig.GetCollection("auth_users")
+	cursor, err := users.Find(ctx, bson.M{
+		pendingLifecycleEventField: bson.M{"$exists": true},
+	})
+	if err != nil {
+		return fmt.Errorf("find pending user lifecycle events: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var reconciliationErr error
+	for cursor.Next(ctx) {
+		var record struct {
+			ID      string `bson:"_id"`
+			Payload string `bson:"pendingLifecycleEvent"`
+		}
+		if err := cursor.Decode(&record); err != nil {
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("decode pending lifecycle event: %w", err))
+			continue
+		}
+
+		var event models.UserEvent
+		if err := json.Unmarshal([]byte(record.Payload), &event); err != nil {
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("decode pending lifecycle event for user %s: %w", record.ID, err))
+			continue
+		}
+		if event.EventType != models.EventTypeUserCreated {
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("unsupported pending lifecycle event type %q for user %s", event.EventType, record.ID))
+			continue
+		}
+		if err := s.publisher.PublishUserCreated(ctx, event); err != nil {
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("publish pending registration event for user %s: %w", record.ID, err))
+			continue
+		}
+		if _, err := users.UpdateOne(ctx,
+			bson.M{"_id": record.ID, pendingLifecycleEventField: record.Payload},
+			bson.M{"$unset": bson.M{pendingLifecycleEventField: ""}},
+		); err != nil {
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("clear published registration event for user %s: %w", record.ID, err))
+		}
+	}
+	if err := cursor.Err(); err != nil {
+		reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("iterate pending lifecycle events: %w", err))
+	}
+	return reconciliationErr
 }
 
 // DeleteAccount removes the authenticated account and publishes its deletion event.

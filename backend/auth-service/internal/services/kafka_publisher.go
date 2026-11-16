@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -26,10 +27,13 @@ func NewKafkaPublisher(brokers, clientID, createdTopic, updatedTopic, deletedTop
 	}
 
 	writer := &kafka.Writer{
-		Addr:         kafka.TCP(parsedBrokers...),
-		Balancer:     &kafka.LeastBytes{},
-		RequiredAcks: kafka.RequireAll,
-		Async:        false,
+		Addr:            kafka.TCP(parsedBrokers...),
+		Balancer:        &kafka.LeastBytes{},
+		RequiredAcks:    kafka.RequireAll,
+		Async:           false,
+		MaxAttempts:     5,
+		WriteBackoffMin: 250 * time.Millisecond,
+		WriteBackoffMax: 2 * time.Second,
 		Transport: &kafka.Transport{
 			ClientID: clientID,
 		},

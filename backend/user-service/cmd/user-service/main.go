@@ -74,6 +74,7 @@ func main() {
 		cfg.KafkaTopicUserCreated,
 		cfg.KafkaTopicUserUpdated,
 		cfg.KafkaTopicUserDeleted,
+		cfg.KafkaDLQTopic,
 		userService,
 		log,
 	)
