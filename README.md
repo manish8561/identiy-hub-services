@@ -748,51 +748,15 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 
 ## Future Implementations and Enhancements
 
-- **Upgrade versions for backend, db, frontend**
-- **Observability**
-  - Add `trace_id` propagation across API Gateway, Auth Service, and User Service.
-  - Integrate OpenTelemetry for distributed tracing and metrics collection.
-  -  **Service Discovery**: Implement service discovery (Consul, etcd)
-- **Infrastructure**
-  - Add Kubernetes manifests/Helm charts for frontend and backend deployments.
-  - Introduce environment-specific deployment overlays (dev, test, prod).
-- **Quality and reliability**
-  - Expand automated test coverage (unit, integration, and API contract tests).
-  - Add CI checks for build, lint, test, and image validation.
-  - Add comprehensive test suites for each service
-- **Notification Service**
-  - For sending email, sms, push notifications, whatsapp, etc. as per need
-  - Separate service with no link api gateway
+The prioritized, implementation-ready roadmap is maintained in [architect.md](architect.md).
 
-1. **Load Balancing**: Add load balancers for each service
-3. **Circuit Breakers**: Implement circuit breakers for service communication
-4. **Distributed Tracing**: Add tracing (Jaeger, Zipkin)
-5. **Monitoring**: Implement metrics and monitoring (Prometheus, Grafana) 
+Priority areas:
+
+- **P0 security and correctness**: secret-provider integration, MFA/passkeys, abuse controls, security audit events, centralized authorization, and end-to-end security tests.
+- **P1 reliability and quality**: integration/contract tests, CI pipelines, event schema contracts, idempotency/reconciliation, backups and restore testing, API compatibility, and dependency upgrades.
+- **P1 observability**: correlation and trace propagation, OpenTelemetry, Prometheus/Grafana, operational dashboards, readiness checks, alerting, and runbooks.
+- **P2 product and infrastructure**: additional notification channels, Kubernetes/Helm, load balancing and discovery, circuit breakers, OIDC/SAML federation, multi-tenancy, privacy controls, and deployment promotion/rollback.
 
 ## Proposed Implementation Roadmap
 
-The items below are proposed follow-up work and are not represented as implemented features.
-
-### 1. Strengthen service reliability
-
-- Add bounded retries, backoff, and dead-letter handling for Kafka event processing.
-- Implement circuit breakers and timeouts for synchronous service-to-service calls.
-- Add integration and contract tests for authentication, profile synchronization, and notification delivery.
-
-### 2. Expand observability
-
-- Propagate a correlation/trace ID across the API Gateway and backend services.
-- Add OpenTelemetry instrumentation for distributed traces and service metrics.
-- Provide Prometheus metrics and Grafana dashboards for request latency, error rates, Kafka consumer lag, and notification outcomes.
-
-### 3. Extend notifications
-
-- Add channel adapters for additional delivery methods such as SMS and push notifications.
-- Keep channel-specific provider configuration isolated from the notification API.
-- Add tests for provider failures, retries, and delivery-history consistency.
-
-### 4. Improve deployment and delivery
-
-- Add CI workflows to run formatting, lint, tests, builds, and container image validation.
-- Add Kubernetes deployment manifests or Helm charts with environment-specific configuration.
-- Evaluate service discovery and load balancing when scaling beyond the current Compose deployment.
+See [architect.md](architect.md) for the complete phased roadmap. Kafka retries, DLQ handling, and the authentication event outbox are already implemented; remaining work is organized by security, reliability, observability, product, and infrastructure priority.

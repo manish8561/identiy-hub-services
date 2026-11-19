@@ -471,14 +471,7 @@ logger.GetLogger().Error("Database connection failed",
 
 ## Future Enhancements
 
-1. **Service Discovery**: Implement service discovery (Consul, etcd)
-2. **Load Balancing**: Add load balancers for each service
-3. **Circuit Breakers**: Implement circuit breakers for service communication
-4. **Distributed Tracing**: Add tracing (Jaeger, Zipkin)
-5. **Monitoring**: Implement metrics and monitoring (Prometheus, Grafana)
-6. **Message Queues**: Add async communication (RabbitMQ, Kafka)
-7. **API Documentation**: Add Swagger/OpenAPI documentation
-8. **Testing**: Add comprehensive test suites for each service
+The backend roadmap is maintained in the repository-level [architecture document](../architect.md). Current follow-up priorities are secret management, MFA/passkeys, security audit trails, centralized authorization, end-to-end and contract testing, CI, schema compatibility, reconciliation tooling, OpenTelemetry, Prometheus/Grafana, alerting, Kubernetes/Helm, and service discovery/load balancing.
 
 ## Troubleshooting
 

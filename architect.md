@@ -165,20 +165,34 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 1. ~~**Auth-side account delete**~~ — ✅ Done: self-service deletion requires the current password, revokes sessions, deletes the auth account, and publishes `user.deleted.v1` to remove the synchronized profile. Admins can also delete customer accounts.
 2. ~~**Production cookie / TLS settings**~~ — ✅ Done: `COOKIE_SECURE=true` and `COOKIE_SAME_SITE=None` are now the production defaults (compose, `.env`, `deploy.sh`). `NewCookieConfig` enforces `Secure=true` whenever `SameSite=None` (RFC 6265bis).
+3. **Secrets management** — Remove remaining static credentials and signing keys from Compose files and deploy helpers. Add a secret-provider integration (for example Docker secrets or an external vault), secret rotation, startup validation, and clear failure behavior for missing or weak production secrets.
+4. **Identity hardening** — Add MFA/TOTP and recovery codes, with WebAuthn/passkeys as the preferred passwordless follow-up. Establish a reusable auth policy for step-up authentication on password, email, role, and account lifecycle changes.
+5. **Security abuse controls** — Retain service-level rate limits, but add login/registration/forgot-password abuse protection that combines IP and account limits, account lockout or escalating delays, device/session risk signals, and privacy-safe responses. Add CAPTCHA only at external-facing boundaries where bot activity is measurable.
+6. **Security audit trail** — Record append-only security events for login, logout, MFA changes, password and email changes, session revocation, role/status changes, and account deletion. Include actor, subject, source IP, user-agent, trace ID, timestamp, and outcome without storing secrets or sensitive token values.
+7. **Authorization model** — Replace isolated role checks with a centralized policy boundary such as RBAC with scoped permissions, and prepare for per-resource and organization/tenant ownership rules. Include policy tests and prevent privilege escalation by self-service profile updates.
+8. **End-to-end security validation** — Add automated tests for cookie flags, CSRF exposure, CORS origin handling, session fixation/replay, privilege boundaries, password reset/enrollment links, and admin restrictions.
 
 ### P1 — Reliability and quality
 
-1. ~~**Kafka DLQ + bounded retries / backoff**~~ ✅ Done— Failed consumers can redeliver forever or drop bad events; registration can succeed even when Kafka publish fails. Add dead-letter topics, retry limits, and durable reconciliation where needed.
+1. ~~**Kafka DLQ + bounded retries / backoff**~~ — ✅ Done: consumers use bounded retries and backoff, publish exhausted events to service-specific DLQs, and registration uses a durable outbox-style event.
 2. **Integration and contract tests** — Unit tests exist for core packages; add end-to-end coverage for auth → Kafka → user/notification sync and API contracts.
 3. **CI pipelines** — Makefile and git hooks exist locally; add CI (e.g. GitHub Actions) for format, lint, test, build, and image validation.
 4. ~~**Wire frontend to user APIs**~~ — ✅ Done: the admin dashboard lists paginated users with edit/delete actions, profile details can be updated, and placeholder dashboard metrics have been removed.
 5. ~~**Service-level rate limiting**~~ — ✅ Done: Auth, User, and Notification services enforce per-IP token-bucket limits (10 requests/second, burst of 20) on API routes for defense in depth.
+6. **Event contract registry** — Define versioned Avro/JSON Schemas or protobuf contracts for user lifecycle events, schema compatibility checks in CI, and explicit backward/forward compatibility rules.
+7. **Idempotency and reconciliation** — Add idempotency keys to mutating public APIs and a recurring reconciliation job that detects auth/profile/notification drift and audits Kafka DLQs. Provide operator-safe replay tools.
+8. **Data lifecycle and backup** — Document MongoDB retention, add scheduled backups and restore tests, verify TTL behavior in production-like environments, and define RPO/RTO objectives.
+9. **API compatibility policy** — Establish public endpoint versioning, deprecation headers, pagination conventions, and stable error shapes. Generate or validate the gateway OpenAPI artifact in CI instead of maintaining documentation independently.
+10. **Dependency and upgrade automation** — Pin service and base-image versions, add automated dependency update and vulnerability scans, and maintain a staged upgrade process for MongoDB, Kafka, Angular, Go, and container images.
 
 ### P1 — Observability
 
 1. **Correlation / `trace_id` propagation** across API Gateway → Auth, User, and Notification services (logs and headers).
 2. **OpenTelemetry** instrumentation for distributed traces and metrics.
 3. **Prometheus + Grafana** for request latency, error rates, Kafka consumer lag, and notification delivery outcomes.
+4. **Structured audit and operational dashboards** — Add dashboards for auth success/failure, session revocations, password resets, account state changes, DLQ depth, replay activity, MongoDB health, and SMTP failure rates.
+5. **Health and readiness semantics** — Separate process liveness from dependency readiness. Report MongoDB and Kafka connectivity, and avoid exposing internal dependency details to unauthenticated clients.
+6. **Alerting and runbooks** — Add alert thresholds and actionable runbooks for broker loss, MongoDB degradation, consumer lag, DLQ growth, failed mail delivery, elevated login failures, and certificate or cookie misconfiguration.
 
 ### P2 — Product and infrastructure
 
@@ -186,6 +200,12 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 2. **Kubernetes / Helm** — Manifests or charts with environment-specific overlays (dev, test, prod) when scaling beyond Compose.
 3. **Load balancing and service discovery** — Evaluate when running multiple replicas of each service.
 4. **Circuit breakers** for synchronous gateway → service calls (alongside timeouts).
+5. **External identity federation** — Add OIDC/SAML integration for enterprise sign-in, account linking, just-in-time provisioning, and explicit local/enterprise account ownership rules.
+6. **Multi-tenancy** — If organizations become a product requirement, introduce organization/workspace identifiers at the API, data, event, authorization, and audit layers. Keep tenant boundaries testable and avoid a later data migration.
+7. **Privacy and consent controls** — Add account-data export, configurable retention/deletion, notification consent records, privacy preferences, and a documented deletion job for all service databases and email provider state.
+8. **Delivery isolation** — Move notification provider and retry workers behind dedicated queues or jobs. Add per-channel templates, preview/test tooling, unsubscribe management, and provider reputation monitoring.
+9. **Edge and network hardening** — Add TLS termination and trusted reverse-proxy configuration, security headers, CSP/CSRF policy review, request-size limits, and separate public/private service networks.
+10. **Deployment environments** — Keep dev, test, staging, and production configurations isolated with immutable images, promotion workflows, smoke tests, database migration gates, and rollback criteria.
 
 ### P2 — Cleanup and documentation
 
@@ -193,6 +213,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 2. ~~**Refresh docs**~~ — Keep `README.md` / `backend/README.md` aligned with reality (notification service is implemented; gateway and service-level rate limiting and router modules are done).
 3. ~~**Auth / user product gaps**~~ — ✅ Done: password change/reset, email verification, profile email re-verification, password-confirmed self-service account deletion, and admin role/status/deletion controls are available through the UI and backend.
 4. ~~**User sessions collection**~~ — ✅ Done: `auth_db.user_sessions` records each issued cookie by JWT session ID, validates active sessions, revokes sessions on logout/refresh/account deletion, and expires old records through a MongoDB TTL index.
+5. **Operational ownership** — Define service ownership, escalation paths, local run commands, required environment variables, release notes, and recovery procedures for MongoDB, Kafka, DLQs, mail, and sessions.
 
 ### Already in place (do not re-plan as greenfield)
 
