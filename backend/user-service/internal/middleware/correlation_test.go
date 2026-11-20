@@ -46,3 +46,17 @@ func TestCorrelationIDReplacesInvalidID(t *testing.T) {
 		t.Fatalf("response correlation ID = %q, want generated UUIDv4", id)
 	}
 }
+
+func TestNewCorrelationIDGeneratesUniqueIDs(t *testing.T) {
+	first, err := newCorrelationID()
+	if err != nil {
+		t.Fatalf("first ID generation failed: %v", err)
+	}
+	second, err := newCorrelationID()
+	if err != nil {
+		t.Fatalf("second ID generation failed: %v", err)
+	}
+	if first == second {
+		t.Fatalf("successive IDs are identical: %q", first)
+	}
+}

@@ -7,6 +7,7 @@ toolchain go1.26.11
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/google/uuid v1.6.0
 	github.com/segmentio/kafka-go v0.4.50
 	go.mongodb.org/mongo-driver v1.17.7
 	go.uber.org/zap v1.26.0
