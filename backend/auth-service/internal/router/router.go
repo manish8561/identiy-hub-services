@@ -14,6 +14,7 @@ import (
 func NewRouter(authHandler *handlers.AuthHandler, log logger.Logger, allowedOrigins []string) *gin.Engine {
 	r := gin.Default()
 
+	r.Use(middleware.CorrelationID())
 	r.Use(middleware.EnableCORS(allowedOrigins))
 	r.Use(middleware.ZapMiddleware(log))
 

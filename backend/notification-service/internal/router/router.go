@@ -7,17 +7,22 @@ import (
 	"notification-service/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
-func New(handler *handlers.NotificationHandler, secret string, origins []string) *gin.Engine {
-	r := gin.Default()
+func New(handler *handlers.NotificationHandler, secret string, origins []string, log *zap.Logger) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(middleware.CorrelationID())
+	r.Use(middleware.RequestLogging(log))
 	r.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 		for _, allowed := range origins {
 			if origin == allowed {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Correlation-ID")
+				c.Writer.Header().Set("Access-Control-Expose-Headers", "X-Correlation-ID")
 				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
 				break
 			}

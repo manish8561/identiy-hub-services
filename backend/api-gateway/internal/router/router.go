@@ -6,6 +6,7 @@ import (
 	nethttp "net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,6 +114,15 @@ func setForwardedClientIP(req *nethttp.Request, ip string) {
 	req.Header.Set("X-Forwarded-For", ip)
 }
 
+func copyResponseHeaders(dst, src nethttp.Header) {
+	for key, values := range src {
+		if strings.EqualFold(key, correlationIDHeader) {
+			continue
+		}
+		dst[key] = values
+	}
+}
+
 // RegisterHealthEndpoints registers health check endpoints
 func RegisterHealthEndpoints(srv *http.Server) {
 	srv.HandleFunc("/health", func(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -135,9 +145,7 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	})
@@ -157,9 +165,7 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	})
@@ -179,9 +185,7 @@ func RegisterHealthEndpoints(srv *http.Server) {
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	})
@@ -215,16 +219,14 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	}))
@@ -240,16 +242,14 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	}))
@@ -265,16 +265,14 @@ func RegisterProxyRoutes(srv *http.Server, limiter *simpleTokenBucketLimiter, rp
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
-		req.Header = r.Header
+		req.Header = r.Header.Clone()
 		resp, err := upstreamHTTPClient.Do(req)
 		if err != nil {
 			nethttp.Error(w, badGatewayMessage, nethttp.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
-		for k, v := range resp.Header {
-			w.Header()[k] = v
-		}
+		copyResponseHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 	}))

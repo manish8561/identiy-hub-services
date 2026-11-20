@@ -187,7 +187,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P1 — Observability
 
-1. **Correlation / `trace_id` propagation** across API Gateway → Auth, User, and Notification services (logs and headers).
+1. ~~**Correlation ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated at the gateway and each service, returned to callers, propagated on proxied requests, and included in service request logs. Browser CORS allows and exposes the header.
 2. **OpenTelemetry** instrumentation for distributed traces and metrics.
 3. **Prometheus + Grafana** for request latency, error rates, Kafka consumer lag, and notification delivery outcomes.
 4. **Structured audit and operational dashboards** — Add dashboards for auth success/failure, session revocations, password resets, account state changes, DLQ depth, replay activity, MongoDB health, and SMTP failure rates.
@@ -228,3 +228,4 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 - Local / prod / test Docker Compose and `deploy.sh`
 - Local `make` lint / test / security tooling and unit tests for core packages
 - Toast notifications for success and error messages in the frontend
+- Correlation ID propagation through the API Gateway, Auth, User, and Notification services (`X-Correlation-ID` request/response header and service request logs)

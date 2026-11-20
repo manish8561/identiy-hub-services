@@ -19,6 +19,28 @@ func TestNewHTTPServer(t *testing.T) {
 	require.NotNil(t, server)
 }
 
+func TestNewHTTPServer_PropagatesCorrelationID(t *testing.T) {
+	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("X-Correlation-ID", "client-id:123")
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, req)
+
+	require.Equal(t, "client-id:123", response.Header().Get("X-Correlation-ID"))
+}
+
+func TestNewHTTPServer_GeneratesCorrelationIDForUnknownRoute(t *testing.T) {
+	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/not-found", nil))
+
+	require.Equal(t, http.StatusNotFound, response.Code)
+	id := response.Header().Get("X-Correlation-ID")
+	require.Regexp(t, `^[a-f0-9]{32}$`, id)
+}
+
 func TestNewHTTPServer_UsesOptionalHTTPConfig(t *testing.T) {
 	cfg := &conf.Server{Http: &conf.Server_HTTP{Network: "tcp"}}
 	server := NewHTTPServer(cfg, nil, log.DefaultLogger)

@@ -53,7 +53,7 @@ func main() {
 		defer consumer.Close()
 	}
 
-	server := router.New(handler, cfg.JWTSecret, cfg.AllowedOrigins)
+	server := router.New(handler, cfg.JWTSecret, cfg.AllowedOrigins, logger)
 	logger.Info("notification service starting", zap.String("port", cfg.Port))
 	if err := server.Run(fmt.Sprintf(":%s", cfg.Port)); err != nil {
 		logger.Fatal("notification service stopped", zap.Error(err))

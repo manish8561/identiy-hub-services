@@ -754,7 +754,7 @@ Priority areas:
 
 - **P0 security and correctness**: secret-provider integration, MFA/passkeys, abuse controls, security audit events, centralized authorization, and end-to-end security tests.
 - **P1 reliability and quality**: integration/contract tests, CI pipelines, event schema contracts, idempotency/reconciliation, backups and restore testing, API compatibility, and dependency upgrades.
-- **P1 observability**: correlation and trace propagation, OpenTelemetry, Prometheus/Grafana, operational dashboards, readiness checks, alerting, and runbooks.
+- **P1 observability**: OpenTelemetry trace propagation, Prometheus/Grafana, operational dashboards, readiness checks, alerting, and runbooks. `X-Correlation-ID` propagation across the gateway and backend services is implemented.
 - **P2 product and infrastructure**: additional notification channels, Kubernetes/Helm, load balancing and discovery, circuit breakers, OIDC/SAML federation, multi-tenancy, privacy controls, and deployment promotion/rollback.
 
 ## Proposed Implementation Roadmap

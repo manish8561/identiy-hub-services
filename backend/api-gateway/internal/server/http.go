@@ -23,6 +23,7 @@ func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.L
 	}
 
 	var opts = []kratoshttp.ServerOption{
+		kratoshttp.Filter(router.CorrelationID(logger)),
 		kratoshttp.Middleware(
 			recovery.Recovery(),
 		),
