@@ -471,7 +471,7 @@ logger.GetLogger().Error("Database connection failed",
 
 ## Future Enhancements
 
-The backend roadmap is maintained in the repository-level [architecture document](../architect.md). `X-Correlation-ID` accepts 1–128 alphanumeric or `._:-` characters; absent or invalid values are replaced with a random ID. The gateway and each service propagate the ID, return it on responses, and include it in service request logs; CORS permits and exposes the header to browsers. Current follow-up priorities are secret management, MFA/passkeys, security audit trails, centralized authorization, end-to-end and contract testing, CI, schema compatibility, reconciliation tooling, OpenTelemetry, Prometheus/Grafana, alerting, Kubernetes/Helm, and service discovery/load balancing.
+The backend roadmap is maintained in the repository-level [architecture document](../architect.md). `X-Correlation-ID` accepts 1–128 alphanumeric or `._:-` characters; absent or invalid values are replaced with a random UUIDv4. The gateway and each service propagate the ID, return it on responses, and include it in service request logs; CORS permits and exposes the header to browsers. Current follow-up priorities are secret management, MFA/passkeys, security audit trails, centralized authorization, end-to-end and contract testing, CI, schema compatibility, reconciliation tooling, OpenTelemetry, Prometheus/Grafana, alerting, Kubernetes/Helm, and service discovery/load balancing.
 
 ## Troubleshooting
 

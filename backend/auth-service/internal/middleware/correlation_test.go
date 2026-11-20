@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,7 @@ func TestCorrelationIDReplacesInvalidID(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	id := w.Header().Get(CorrelationIDHeader)
-	if !validCorrelationID(id) || id == "not a valid id" {
-		t.Fatalf("response correlation ID = %q, want generated valid ID", id)
+	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(id) {
+		t.Fatalf("response correlation ID = %q, want generated UUIDv4", id)
 	}
 }

@@ -38,7 +38,7 @@ func TestNewHTTPServer_GeneratesCorrelationIDForUnknownRoute(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, response.Code)
 	id := response.Header().Get("X-Correlation-ID")
-	require.Regexp(t, `^[a-f0-9]{32}$`, id)
+	require.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, id)
 }
 
 func TestNewHTTPServer_UsesOptionalHTTPConfig(t *testing.T) {
