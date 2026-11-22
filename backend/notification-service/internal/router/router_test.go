@@ -63,10 +63,10 @@ func TestNewPropagatesCorrelationIDAndExposesItToBrowsers(t *testing.T) {
 	if got := w.Header().Get("X-Correlation-ID"); got != "client-id:123" {
 		t.Fatalf("response correlation ID = %q, want %q", got, "client-id:123")
 	}
-	if got := w.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization, X-Correlation-ID" {
+	if got := w.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Authorization, X-Correlation-ID, X-Trace-ID" {
 		t.Fatalf("allowed headers = %q", got)
 	}
-	if got := w.Header().Get("Access-Control-Expose-Headers"); got != "X-Correlation-ID" {
-		t.Fatalf("exposed headers = %q, want X-Correlation-ID", got)
+	if got := w.Header().Get("Access-Control-Expose-Headers"); got != "X-Correlation-ID, X-Trace-ID" {
+		t.Fatalf("exposed headers = %q", got)
 	}
 }

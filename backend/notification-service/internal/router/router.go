@@ -14,6 +14,7 @@ func New(handler *handlers.NotificationHandler, secret string, origins []string,
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.CorrelationID())
+	r.Use(middleware.TraceID())
 	r.Use(middleware.RequestLogging(log))
 	r.Use(func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
@@ -21,8 +22,8 @@ func New(handler *handlers.NotificationHandler, secret string, origins []string,
 			if origin == allowed {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Correlation-ID")
-				c.Writer.Header().Set("Access-Control-Expose-Headers", "X-Correlation-ID")
+				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Correlation-ID, X-Trace-ID")
+				c.Writer.Header().Set("Access-Control-Expose-Headers", "X-Correlation-ID, X-Trace-ID")
 				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
 				break
 			}

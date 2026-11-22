@@ -13,6 +13,8 @@ type UserEvent struct {
 	EventID       string    `json:"event_id"`
 	EventType     string    `json:"event_type"`
 	Timestamp     time.Time `json:"timestamp"`
+	TraceID       string    `json:"trace_id,omitempty"`
+	CorrelationID string    `json:"correlation_id,omitempty"`
 	UserID        string    `json:"user_id"`
 	Email         string    `json:"email,omitempty"`
 	Name          string    `json:"name,omitempty"`

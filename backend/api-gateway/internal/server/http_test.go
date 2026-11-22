@@ -30,6 +30,17 @@ func TestNewHTTPServer_PropagatesCorrelationID(t *testing.T) {
 	require.Equal(t, "client-id:123", response.Header().Get("X-Correlation-ID"))
 }
 
+func TestNewHTTPServer_PropagatesTraceID(t *testing.T) {
+	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("X-Trace-ID", "0123456789ABCDEF0123456789ABCDEF")
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, req)
+
+	require.Equal(t, "0123456789abcdef0123456789abcdef", response.Header().Get("X-Trace-ID"))
+}
+
 func TestNewHTTPServer_GeneratesCorrelationIDForUnknownRoute(t *testing.T) {
 	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
 	response := httptest.NewRecorder()

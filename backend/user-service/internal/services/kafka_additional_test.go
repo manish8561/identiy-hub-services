@@ -5,6 +5,7 @@ import (
 	"testing"
 	"user-service/internal/models"
 
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -94,4 +95,12 @@ func TestUserEventConsumerNoopsForEmptyState(t *testing.T) {
 	cancel()
 	consumer = &UserEventConsumer{}
 	consumer.Start(ctx)
+}
+
+func TestKafkaHeaderValue(t *testing.T) {
+	headers := []kafka.Header{
+		{Key: "X-Trace-ID", Value: []byte("0123456789abcdef0123456789abcdef")},
+	}
+	assert.Equal(t, "0123456789abcdef0123456789abcdef", kafkaHeaderValue(headers, "x-trace-id"))
+	assert.Empty(t, kafkaHeaderValue(headers, "x-correlation-id"))
 }

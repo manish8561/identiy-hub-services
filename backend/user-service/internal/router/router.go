@@ -19,6 +19,7 @@ func NewRouterWithAccountStatus(userHandler *handlers.UserHandler, log logger.Lo
 	r := gin.Default()
 
 	r.Use(middleware.CorrelationID())
+	r.Use(middleware.TraceID())
 	r.Use(middleware.EnableCORS(allowedOrigins))
 	r.Use(middleware.ZapMiddleware(log))
 

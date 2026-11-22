@@ -2,12 +2,14 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
 )
 
 const correlationIDHeader = "X-Correlation-ID"
+const traceIDHeader = "X-Trace-ID"
 
 // CorrelationID applies correlation ID validation, propagation, and request logging.
 func CorrelationID(logger kratoslog.Logger) func(http.Handler) http.Handler {
@@ -18,6 +20,7 @@ func CorrelationID(logger kratoslog.Logger) func(http.Handler) http.Handler {
 					kratoslog.LevelInfo,
 					"msg", "HTTP request",
 					"correlation_id", r.Header.Get(correlationIDHeader),
+					"trace_id", r.Header.Get(traceIDHeader),
 					"method", r.Method,
 					"path", r.URL.Path,
 				)
@@ -39,10 +42,35 @@ func withCorrelationID(next http.Handler) http.Handler {
 			}
 		}
 
+		traceID := r.Header.Get(traceIDHeader)
+		if !validTraceID(traceID) {
+			traceID = strings.ReplaceAll(uuid.NewString(), "-", "")
+		} else {
+			traceID = strings.ToLower(traceID)
+		}
+
 		r.Header.Set(correlationIDHeader, id)
+		r.Header.Set(traceIDHeader, traceID)
 		w.Header().Set(correlationIDHeader, id)
+		w.Header().Set(traceIDHeader, traceID)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func validTraceID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, char := range id {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') {
+			continue
+		}
+		if char >= 'A' && char <= 'F' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func validCorrelationID(id string) bool {

@@ -90,7 +90,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		zap.String("client_ip", c.ClientIP()),
 	)
 
-	response, err := h.authService.Register(req)
+	response, err := h.authService.Register(
+		req,
+		c.GetHeader("X-Trace-ID"),
+		c.GetHeader("X-Correlation-ID"),
+	)
 	if err != nil {
 		h.logger.Warn("Registration failed",
 			zap.String("email", req.Email),

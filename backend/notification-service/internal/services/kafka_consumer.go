@@ -82,10 +82,21 @@ func (c *EventConsumer) Start(ctx context.Context) {
 			return c.service.HandleUserCreated(ctx, event)
 		})
 		if processErr != nil {
+			traceID := kafkaHeaderValue(message.Headers, "x-trace-id")
+			correlationID := kafkaHeaderValue(message.Headers, "x-correlation-id")
+			if traceID == "" {
+				var event models.UserEvent
+				if json.Unmarshal(message.Value, &event) == nil {
+					traceID = event.TraceID
+					correlationID = event.CorrelationID
+				}
+			}
 			c.logger.Error("failed to persist notification outcome",
 				zap.Error(processErr),
 				zap.String("topic", message.Topic),
 				zap.Int("attempts", attempts),
+				zap.String("trace_id", traceID),
+				zap.String("correlation_id", correlationID),
 			)
 			if errors.Is(processErr, context.Canceled) || ctx.Err() != nil {
 				return
@@ -93,6 +104,24 @@ func (c *EventConsumer) Start(ctx context.Context) {
 			if err := c.publishDeadLetterWithRetry(ctx, message, attempts, processErr); err != nil {
 				return
 			}
+		}
+		if processErr == nil {
+			traceID := kafkaHeaderValue(message.Headers, "x-trace-id")
+			correlationID := kafkaHeaderValue(message.Headers, "x-correlation-id")
+			var event models.UserEvent
+			if json.Unmarshal(message.Value, &event) == nil {
+				if traceID == "" {
+					traceID = event.TraceID
+				}
+				if correlationID == "" {
+					correlationID = event.CorrelationID
+				}
+			}
+			c.logger.Info("Processed user-created event",
+				zap.String("topic", message.Topic),
+				zap.String("trace_id", traceID),
+				zap.String("correlation_id", correlationID),
+			)
 		}
 		if err := c.reader.CommitMessages(ctx, message); err != nil {
 			c.logger.Error("failed to commit user-created event", zap.Error(err))
@@ -170,6 +199,18 @@ func (c *EventConsumer) publishDeadLetterWithRetry(ctx context.Context, message 
 
 func (c *EventConsumer) publishDeadLetter(ctx context.Context, message kafka.Message, attempts int, cause error) error {
 	headers := append([]kafka.Header(nil), message.Headers...)
+	if kafkaHeaderValue(headers, "x-trace-id") == "" {
+		var event models.UserEvent
+		if json.Unmarshal(message.Value, &event) == nil && event.TraceID != "" {
+			headers = append(headers, kafka.Header{Key: "x-trace-id", Value: []byte(event.TraceID)})
+		}
+	}
+	if kafkaHeaderValue(headers, "x-correlation-id") == "" {
+		var event models.UserEvent
+		if json.Unmarshal(message.Value, &event) == nil && event.CorrelationID != "" {
+			headers = append(headers, kafka.Header{Key: "x-correlation-id", Value: []byte(event.CorrelationID)})
+		}
+	}
 	headers = append(headers,
 		kafka.Header{Key: "x-original-topic", Value: []byte(message.Topic)},
 		kafka.Header{Key: "x-original-partition", Value: []byte(fmt.Sprint(message.Partition))},
@@ -183,6 +224,15 @@ func (c *EventConsumer) publishDeadLetter(ctx context.Context, message kafka.Mes
 		Headers: headers,
 		Time:    time.Now().UTC(),
 	})
+}
+
+func kafkaHeaderValue(headers []kafka.Header, key string) string {
+	for _, header := range headers {
+		if strings.EqualFold(header.Key, key) {
+			return string(header.Value)
+		}
+	}
+	return ""
 }
 
 func (c *EventConsumer) Close() error {

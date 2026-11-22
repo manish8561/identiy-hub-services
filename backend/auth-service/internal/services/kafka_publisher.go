@@ -76,6 +76,10 @@ func (p *KafkaPublisher) publish(ctx context.Context, topic string, event models
 		Topic: topic,
 		Key:   []byte(event.UserID),
 		Value: payload,
+		Headers: []kafka.Header{
+			{Key: "x-trace-id", Value: []byte(event.TraceID)},
+			{Key: "x-correlation-id", Value: []byte(event.CorrelationID)},
+		},
 	})
 }
 

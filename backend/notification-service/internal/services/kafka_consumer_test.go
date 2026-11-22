@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/segmentio/kafka-go"
 )
 
 func TestRetryMessageStopsAfterConfiguredAttempts(t *testing.T) {
@@ -51,5 +53,17 @@ func TestRetryMessageStopsOnContextCancellation(t *testing.T) {
 func TestRetryDelayCapsWithoutDurationOverflow(t *testing.T) {
 	if delay := retryDelay(time.Second, int(^uint(0)>>1)); delay != 30*time.Second {
 		t.Fatalf("retryDelay() = %s, want 30s", delay)
+	}
+}
+
+func TestKafkaHeaderValue(t *testing.T) {
+	headers := []kafka.Header{
+		{Key: "X-Trace-ID", Value: []byte("0123456789abcdef0123456789abcdef")},
+	}
+	if got := kafkaHeaderValue(headers, "x-trace-id"); got != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("trace header = %q", got)
+	}
+	if got := kafkaHeaderValue(headers, "x-correlation-id"); got != "" {
+		t.Fatalf("unexpected correlation header = %q", got)
 	}
 }

@@ -116,7 +116,7 @@ func setForwardedClientIP(req *nethttp.Request, ip string) {
 
 func copyResponseHeaders(dst, src nethttp.Header) {
 	for key, values := range src {
-		if strings.EqualFold(key, correlationIDHeader) {
+		if strings.EqualFold(key, correlationIDHeader) || strings.EqualFold(key, traceIDHeader) {
 			continue
 		}
 		dst[key] = values

@@ -59,11 +59,14 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 	t.Cleanup(func() { upstreamHTTPClient = originalClient })
 
 	var upstreamCorrelationID string
+	var upstreamTraceID string
 	upstreamHTTPClient = &http.Client{
 		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			upstreamCorrelationID = req.Header.Get(correlationIDHeader)
+			upstreamTraceID = req.Header.Get(traceIDHeader)
 			headers := make(http.Header)
 			headers.Set(correlationIDHeader, "upstream-overrode-id")
+			headers.Set(traceIDHeader, "fedcba9876543210fedcba9876543210")
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     headers,
@@ -78,6 +81,7 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 	handler := withCorrelationID(srv)
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
 	req.Header.Set(correlationIDHeader, "client-id:123")
+	req.Header.Set(traceIDHeader, "0123456789abcdef0123456789abcdef")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -87,5 +91,11 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 	}
 	if got := w.Header().Get(correlationIDHeader); got != "client-id:123" {
 		t.Fatalf("response correlation ID = %q, want %q", got, "client-id:123")
+	}
+	if upstreamTraceID != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("upstream trace ID = %q", upstreamTraceID)
+	}
+	if got := w.Header().Get(traceIDHeader); got != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("response trace ID = %q", got)
 	}
 }

@@ -187,7 +187,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P1 — Observability
 
-1. ~~**Correlation ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated as UUIDv4 at the gateway and each service, returned to callers, propagated on proxied requests, and included in service request logs. Browser CORS allows and exposes the header.
+1. ~~**Correlation and trace ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated as UUIDv4 and `X-Trace-ID` is validated or generated as 32-character hex at the gateway and each service. Both are returned to callers, propagated on HTTP requests, and included in service request logs. Lifecycle Kafka events and DLQ messages carry the IDs in payloads and `x-trace-id`/`x-correlation-id` headers, and consumers log them. Browser CORS allows and exposes both headers.
 2. **OpenTelemetry** instrumentation for distributed traces and metrics.
 3. **Prometheus + Grafana** for request latency, error rates, Kafka consumer lag, and notification delivery outcomes.
 4. **Structured audit and operational dashboards** — Add dashboards for auth success/failure, session revocations, password resets, account state changes, DLQ depth, replay activity, MongoDB health, and SMTP failure rates.

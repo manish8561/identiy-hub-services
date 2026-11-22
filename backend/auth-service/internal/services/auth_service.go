@@ -189,10 +189,18 @@ func (s *AuthService) ChangePassword(tokenString, currentPassword, newPassword s
 
 // Register creates a new user account with the provided registration details.
 // Returns a success response if registration is successful, or an error if the user already exists.
-func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResponse, error) {
+func (s *AuthService) Register(req models.RegisterRequest, identifiers ...string) (*models.RegisterResponse, error) {
 	collection := s.mongoConfig.GetCollection("auth_users")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	traceID := ""
+	correlationID := ""
+	if len(identifiers) > 0 {
+		traceID = identifiers[0]
+	}
+	if len(identifiers) > 1 {
+		correlationID = identifiers[1]
+	}
 
 	// Check if user already exists
 	count, err := collection.CountDocuments(ctx, bson.M{"email": req.Email})
@@ -226,6 +234,8 @@ func (s *AuthService) Register(req models.RegisterRequest) (*models.RegisterResp
 		EventID:       primitive.NewObjectID().Hex(),
 		EventType:     models.EventTypeUserCreated,
 		Timestamp:     time.Now().UTC(),
+		TraceID:       traceID,
+		CorrelationID: correlationID,
 		UserID:        newUser.ID,
 		Email:         newUser.Email,
 		Name:          newUser.Name,

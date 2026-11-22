@@ -14,7 +14,10 @@ import (
 )
 
 func TestRegistrationUserDocumentContainsPendingEvent(t *testing.T) {
-	event := models.UserEvent{EventID: "event-1", EventType: models.EventTypeUserCreated, UserID: "user-1"}
+	event := models.UserEvent{
+		EventID: "event-1", EventType: models.EventTypeUserCreated, UserID: "user-1",
+		TraceID: "0123456789abcdef0123456789abcdef", CorrelationID: "correlation-1",
+	}
 	document, err := registrationUserDocument(models.User{ID: "user-1", Email: "user@example.test"}, event)
 	require.NoError(t, err)
 
