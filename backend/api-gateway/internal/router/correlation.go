@@ -10,6 +10,8 @@ import (
 
 const correlationIDHeader = "X-Correlation-ID"
 const traceIDHeader = "X-Trace-ID"
+const spanIDHeader = "X-Span-ID"
+const parentSpanIDHeader = "X-Parent-Span-ID"
 
 // CorrelationID applies correlation ID validation, propagation, and request logging.
 func CorrelationID(logger kratoslog.Logger) func(http.Handler) http.Handler {
@@ -21,6 +23,8 @@ func CorrelationID(logger kratoslog.Logger) func(http.Handler) http.Handler {
 					"msg", "HTTP request",
 					"correlation_id", r.Header.Get(correlationIDHeader),
 					"trace_id", r.Header.Get(traceIDHeader),
+					"span_id", r.Header.Get(spanIDHeader),
+					"parent_span_id", r.Header.Get(parentSpanIDHeader),
 					"method", r.Method,
 					"path", r.URL.Path,
 				)
@@ -49,12 +53,55 @@ func withCorrelationID(next http.Handler) http.Handler {
 			traceID = strings.ToLower(traceID)
 		}
 
+		parentSpanID := r.Header.Get(spanIDHeader)
+		if !validSpanID(parentSpanID) {
+			parentSpanID = ""
+		} else {
+			parentSpanID = strings.ToLower(parentSpanID)
+		}
+		spanID, err := newSpanID()
+		if err != nil {
+			http.Error(w, "failed to create span ID", http.StatusInternalServerError)
+			return
+		}
+
 		r.Header.Set(correlationIDHeader, id)
 		r.Header.Set(traceIDHeader, traceID)
+		r.Header.Set(spanIDHeader, spanID)
+		r.Header.Del(parentSpanIDHeader)
+		if parentSpanID != "" {
+			r.Header.Set(parentSpanIDHeader, parentSpanID)
+		}
 		w.Header().Set(correlationIDHeader, id)
 		w.Header().Set(traceIDHeader, traceID)
+		w.Header().Set(spanIDHeader, spanID)
+		w.Header().Del(parentSpanIDHeader)
+		if parentSpanID != "" {
+			w.Header().Set(parentSpanIDHeader, parentSpanID)
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func validSpanID(id string) bool {
+	if len(id) != 16 {
+		return false
+	}
+	for _, char := range id {
+		if (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func newSpanID() (string, error) {
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", err
+	}
+	return strings.ReplaceAll(id.String(), "-", "")[:16], nil
 }
 
 func validTraceID(id string) bool {

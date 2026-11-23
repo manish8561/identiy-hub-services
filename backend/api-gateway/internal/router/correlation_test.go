@@ -60,13 +60,19 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 
 	var upstreamCorrelationID string
 	var upstreamTraceID string
+	var upstreamSpanID string
+	var upstreamParentSpanID string
 	upstreamHTTPClient = &http.Client{
 		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			upstreamCorrelationID = req.Header.Get(correlationIDHeader)
 			upstreamTraceID = req.Header.Get(traceIDHeader)
+			upstreamSpanID = req.Header.Get(spanIDHeader)
+			upstreamParentSpanID = req.Header.Get(parentSpanIDHeader)
 			headers := make(http.Header)
 			headers.Set(correlationIDHeader, "upstream-overrode-id")
 			headers.Set(traceIDHeader, "fedcba9876543210fedcba9876543210")
+			headers.Set(spanIDHeader, "fedcba9876543210")
+			headers.Set(parentSpanIDHeader, "fedcba9876543210")
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     headers,
@@ -82,6 +88,7 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
 	req.Header.Set(correlationIDHeader, "client-id:123")
 	req.Header.Set(traceIDHeader, "0123456789abcdef0123456789abcdef")
+	req.Header.Set(spanIDHeader, "0123456789abcdef")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)
@@ -95,7 +102,19 @@ func TestProxyForwardsCorrelationID(t *testing.T) {
 	if upstreamTraceID != "0123456789abcdef0123456789abcdef" {
 		t.Fatalf("upstream trace ID = %q", upstreamTraceID)
 	}
+	if !validSpanID(upstreamSpanID) || upstreamSpanID == "0123456789abcdef" {
+		t.Fatalf("upstream span ID = %q, want a new span ID", upstreamSpanID)
+	}
+	if upstreamParentSpanID != "0123456789abcdef" {
+		t.Fatalf("upstream parent span ID = %q", upstreamParentSpanID)
+	}
 	if got := w.Header().Get(traceIDHeader); got != "0123456789abcdef0123456789abcdef" {
 		t.Fatalf("response trace ID = %q", got)
+	}
+	if got := w.Header().Get(spanIDHeader); got != upstreamSpanID {
+		t.Fatalf("response span ID = %q, want gateway span %q", got, upstreamSpanID)
+	}
+	if got := w.Header().Get(parentSpanIDHeader); got != "0123456789abcdef" {
+		t.Fatalf("response parent span ID = %q", got)
 	}
 }

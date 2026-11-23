@@ -187,7 +187,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 
 ### P1 — Observability
 
-1. ~~**Correlation and trace ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated as UUIDv4 and `X-Trace-ID` is validated or generated as 32-character hex at the gateway and each service. Both are returned to callers, propagated on HTTP requests, and included in service request logs. Lifecycle Kafka events and DLQ messages carry the IDs in payloads and `x-trace-id`/`x-correlation-id` headers, and consumers log them. Browser CORS allows and exposes both headers.
+1. ~~**Correlation, trace, and span ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated as UUIDv4 and `X-Trace-ID` as 32-character hex at the gateway and each service. Each HTTP hop gets a fresh 16-character hex `X-Span-ID`, with its caller's span recorded as `X-Parent-Span-ID`. The IDs are returned to callers, propagated on HTTP requests, and included in service request logs. Lifecycle Kafka events and DLQ messages carry trace/correlation IDs in payloads and headers. Browser CORS allows and exposes the HTTP tracing headers.
 2. **OpenTelemetry** instrumentation for distributed traces and metrics.
 3. **Prometheus + Grafana** for request latency, error rates, Kafka consumer lag, and notification delivery outcomes.
 4. **Structured audit and operational dashboards** — Add dashboards for auth success/failure, session revocations, password resets, account state changes, DLQ depth, replay activity, MongoDB health, and SMTP failure rates.
@@ -228,4 +228,4 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 - Local / prod / test Docker Compose and `deploy.sh`
 - Local `make` lint / test / security tooling and unit tests for core packages
 - Toast notifications for success and error messages in the frontend
-- Correlation ID propagation through the API Gateway, Auth, User, and Notification services (`X-Correlation-ID` request/response header and service request logs; generated IDs are UUIDv4)
+- Correlation, trace, and per-hop span ID propagation through the API Gateway, Auth, User, and Notification services (`X-Correlation-ID`, `X-Trace-ID`, `X-Span-ID`, and `X-Parent-Span-ID`; generated IDs are UUID-based and logged)

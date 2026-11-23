@@ -16,6 +16,7 @@ func NewRouter(authHandler *handlers.AuthHandler, log logger.Logger, allowedOrig
 
 	r.Use(middleware.CorrelationID())
 	r.Use(middleware.TraceID())
+	r.Use(middleware.Span())
 	r.Use(middleware.EnableCORS(allowedOrigins))
 	r.Use(middleware.ZapMiddleware(log))
 

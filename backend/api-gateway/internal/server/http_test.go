@@ -41,6 +41,16 @@ func TestNewHTTPServer_PropagatesTraceID(t *testing.T) {
 	require.Equal(t, "0123456789abcdef0123456789abcdef", response.Header().Get("X-Trace-ID"))
 }
 
+func TestNewHTTPServerCreatesRootSpanForRequest(t *testing.T) {
+	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
+	response := httptest.NewRecorder()
+
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	require.Regexp(t, `^[0-9a-f]{16}$`, response.Header().Get("X-Span-ID"))
+	require.Empty(t, response.Header().Get("X-Parent-Span-ID"))
+}
+
 func TestNewHTTPServer_GeneratesCorrelationIDForUnknownRoute(t *testing.T) {
 	server := NewHTTPServer(&conf.Server{}, nil, log.DefaultLogger)
 	response := httptest.NewRecorder()

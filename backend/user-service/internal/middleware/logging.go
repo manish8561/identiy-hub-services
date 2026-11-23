@@ -22,6 +22,8 @@ func LoggingMiddleware(log logger.Logger) gin.HandlerFunc {
 			zap.Int("body_size", param.BodySize),
 			zap.String("correlation_id", param.Request.Header.Get(CorrelationIDHeader)),
 			zap.String("trace_id", param.Request.Header.Get(TraceIDHeader)),
+			zap.String("span_id", param.Request.Header.Get(SpanIDHeader)),
+			zap.String("parent_span_id", param.Request.Header.Get(ParentSpanIDHeader)),
 		)
 
 		// Return empty string since we're using Zap for logging
@@ -45,6 +47,8 @@ func ZapMiddleware(log logger.Logger) gin.HandlerFunc {
 			zap.String("user_agent", c.Request.UserAgent()),
 			zap.String("correlation_id", c.GetHeader(CorrelationIDHeader)),
 			zap.String("trace_id", c.GetHeader(TraceIDHeader)),
+			zap.String("span_id", c.GetHeader(SpanIDHeader)),
+			zap.String("parent_span_id", c.GetHeader(ParentSpanIDHeader)),
 		)
 
 		// Process request
@@ -61,6 +65,8 @@ func ZapMiddleware(log logger.Logger) gin.HandlerFunc {
 			zap.Int("response_size", c.Writer.Size()),
 			zap.String("correlation_id", c.GetHeader(CorrelationIDHeader)),
 			zap.String("trace_id", c.GetHeader(TraceIDHeader)),
+			zap.String("span_id", c.GetHeader(SpanIDHeader)),
+			zap.String("parent_span_id", c.GetHeader(ParentSpanIDHeader)),
 		)
 
 		// Log errors if any
@@ -73,6 +79,8 @@ func ZapMiddleware(log logger.Logger) gin.HandlerFunc {
 					zap.String("client_ip", c.ClientIP()),
 					zap.String("correlation_id", c.GetHeader(CorrelationIDHeader)),
 					zap.String("trace_id", c.GetHeader(TraceIDHeader)),
+					zap.String("span_id", c.GetHeader(SpanIDHeader)),
+					zap.String("parent_span_id", c.GetHeader(ParentSpanIDHeader)),
 				)
 			}
 		}

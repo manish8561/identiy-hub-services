@@ -37,6 +37,8 @@ func RequestLogging(log *zap.Logger) gin.HandlerFunc {
 		log.Info("HTTP request",
 			zap.String("correlation_id", c.GetHeader(CorrelationIDHeader)),
 			zap.String("trace_id", c.GetHeader(TraceIDHeader)),
+			zap.String("span_id", c.GetHeader(SpanIDHeader)),
+			zap.String("parent_span_id", c.GetHeader(ParentSpanIDHeader)),
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),

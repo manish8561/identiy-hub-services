@@ -81,8 +81,8 @@ func TestEnableCORS_OptionsRequest(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.Equal(t, "GET, POST, PUT, DELETE, OPTIONS", w.Header().Get("Access-Control-Allow-Methods"))
-	assert.Equal(t, "Content-Type, Authorization, X-Correlation-ID, X-Trace-ID", w.Header().Get("Access-Control-Allow-Headers"))
-	assert.Equal(t, "X-Correlation-ID, X-Trace-ID", w.Header().Get("Access-Control-Expose-Headers"))
+	assert.Equal(t, "Content-Type, Authorization, X-Correlation-ID, X-Trace-ID, X-Span-ID", w.Header().Get("Access-Control-Allow-Headers"))
+	assert.Equal(t, "X-Correlation-ID, X-Trace-ID, X-Span-ID, X-Parent-Span-ID", w.Header().Get("Access-Control-Expose-Headers"))
 }
 
 func TestEnableCORS_EmptyAllowedOrigins(t *testing.T) {
