@@ -124,6 +124,7 @@ flowchart TD
 - Validates session activity and revokes sessions on logout, refresh, password reset, email or role change, suspension, and account deletion
 - Emits user lifecycle events to Kafka
 - Sends verification and password-reset mail through the configured SMTP provider
+- Provides `PUT /api/auth/profile` for authenticated self-profile updates
 
 ### User Service
 
@@ -154,12 +155,19 @@ flowchart TD
 - Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM` for account verification and password-reset emails; `FRONTEND_URL` defines the public origin used in email links.
 - Admin role/status changes and account deletions are applied in Auth Service and propagated to user profiles through Kafka. User Service also checks active account/session state on protected requests.
 - Kafka keeps the services loosely coupled and resilient to async propagation
+- User and notification consumers use bounded retries and service-specific DLQ topics; auth registration writes pending lifecycle events for reconciliation after Kafka outages.
+- HTTP tracing is implemented at the gateway and every backend service. `X-Correlation-ID` identifies an end-to-end request, `X-Trace-ID` identifies the distributed trace, `X-Span-ID` identifies the current hop, and `X-Parent-Span-ID` identifies the incoming parent span. Invalid or missing IDs are replaced according to service validation rules. The effective headers are returned to HTTP callers and included in service logs.
+- Lifecycle Kafka records and Kafka headers carry trace and correlation IDs. DLQ records carry those IDs plus source topic/partition/offset and processing failure metadata.
 - The gateway acts as the single public interface for client traffic
 - The backend supports both local containerized runs and production deployment via Docker Compose and the `deploy.sh` helper
 
 ## Future changes
 
 Proposed follow-up work. Items are prioritized; higher priority should land before infra/product expansions unless a release needs them sooner.
+
+- Implementation of in-app notification feature for types of users and server side events to show them in the frontend
+- Also have the feature of read and all read notifications
+- A cron job to delete 6 months old notifications.
 
 ### P0 — Security and correctness
 

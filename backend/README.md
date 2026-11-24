@@ -18,6 +18,7 @@ The application has been decomposed into the following microservices:
   - `POST /api/auth/password/forgot` - Request a password reset email
   - `POST /api/auth/password/reset` - Reset a password with a one-time token
   - `POST /api/auth/password` - Change password while signed in
+  - `PUT /api/auth/profile` - Update the signed-in user's name or email
   - `DELETE /api/auth/account` - Permanently delete the signed-in account (requires current password)
   - `PUT /api/auth/users/:id` - Admin-only profile and role update
   - `DELETE /api/auth/users/:id` - Admin-only customer deletion
@@ -58,9 +59,11 @@ Admin accounts must be provisioned through a trusted operational process; users 
 - **Purpose**: Single entry point for all client requests, handles routing and authentication
 - **Features**:
   - Request routing to appropriate services
-  - Authentication middleware
   - CORS handling
-  - Load balancing (future enhancement)
+  - Centralized Swagger/OpenAPI routing
+  - Gateway-level per-IP rate limiting
+  - Correlation, trace, and span ID propagation
+  - Service health proxy endpoints
 
 ### 5. Shared Database
 
@@ -96,12 +99,27 @@ Both auth-service and user-service must share the same `JWT_SECRET`. CORS is con
 
 Auth, user, and notification services also enforce a per-client-IP token bucket on their API routes, independently of the API Gateway. Each service allows 10 requests per second with a burst of 20 per process; excess requests receive HTTP 429 with a `Retry-After` header. Limits are in-memory and therefore apply separately to each service replica. The middleware uses the first address in `X-Forwarded-For` (then `X-Real-IP`, then the connection peer); only trusted proxies should be allowed to supply those headers.
 
+## Correlation, trace, and span propagation
+
+The API gateway and all backend services propagate:
+
+- `X-Correlation-ID` as the request-wide identifier.
+- `X-Trace-ID` as the distributed trace identifier.
+- `X-Span-ID` as the current HTTP hop.
+- `X-Parent-Span-ID` as the preceding hop's span.
+
+Correlation IDs accept 1–128 ASCII letters, digits, `.`, `_`, `:`, or `-`; otherwise a UUIDv4 is generated. Trace IDs must be 32 hexadecimal characters and are normalized to lowercase. Each HTTP hop generates a fresh 16-character hexadecimal span ID, validates the incoming span before using it as the parent, and does not trust a separate parent header.
+
+The gateway applies this context before routing and forwards it to auth, user, and notification services. Gin routers in those services apply the same validation and span replacement for direct requests. Request and response headers are updated consistently, and CORS permits `X-Correlation-ID`, `X-Trace-ID`, and `X-Span-ID` while exposing all four tracing headers.
+
+HTTP logging middleware records `correlation_id`, `trace_id`, `span_id`, and `parent_span_id`. Auth lifecycle events carry `trace_id` and `correlation_id` in JSON and Kafka headers. User and notification consumers log those fields and copy them to DLQ metadata, alongside original-topic, partition, offset, processing-attempt, and processing-error details.
+
 ## Directory Structure
 
 ```
 backend/
 ├── auth-service/
-│   ├── main.go
+│   ├── cmd/auth-service/main.go
 │   ├── go.mod
 │   ├── Dockerfile
 │   └── internal/
@@ -109,9 +127,11 @@ backend/
 │       ├── handlers/
 │       ├── logger/          # Zap structured logging
 │       ├── models/
+│       ├── middleware/
+│       ├── router/
 │       └── services/
 ├── user-service/
-│   ├── main.go
+│   ├── cmd/user-service/main.go
 │   ├── go.mod
 │   ├── Dockerfile
 │   └── internal/
@@ -119,13 +139,19 @@ backend/
 │       ├── handlers/
 │       ├── logger/          # Zap structured logging
 │       ├── models/
+│       ├── middleware/
+│       ├── router/
 │       └── services/
 ├── notification-service/
+│   ├── cmd/notification-service/main.go
 │   ├── go.mod
 │   ├── Dockerfile
 │   └── internal/
+│       ├── config/
 │       ├── handlers/
 │       ├── models/
+│       ├── middleware/
+│       ├── router/
 │       └── services/
 ├── api-gateway/
 │   ├── cmd/
@@ -245,17 +271,22 @@ The repository-level `test.sh` script starts the test MongoDB container and runs
    # Auth Service
    cd auth-service
    go mod tidy
-   go run main.go
+   go run ./cmd/auth-service
 
    # User Service
    cd user-service
    go mod tidy
-   go run main.go
+   go run ./cmd/user-service
+
+   # Notification Service
+   cd notification-service
+   go mod tidy
+   go run ./cmd/notification-service
 
    # API Gateway
    cd api-gateway
    go mod tidy
-   go run main.go
+   go run ./cmd/api-gateway
    ```
 
 2. **Environment Variables**:
@@ -376,6 +407,7 @@ docker compose logs
 # View specific service logs
 docker compose logs auth-service
 docker compose logs user-service
+docker compose logs notification-service
 docker compose logs api-gateway
 ```
 
@@ -492,6 +524,7 @@ docker compose logs
 # View specific service logs
 docker compose logs auth-service
 docker compose logs user-service
+docker compose logs notification-service
 docker compose logs api-gateway
 
 # Follow logs in real-time
@@ -505,6 +538,10 @@ docker compose logs -f
 curl http://localhost:8080/health  # API Gateway
 curl http://localhost:8081/health  # Auth Service
 curl http://localhost:8082/health  # User Service
+curl http://localhost:8083/health  # Notification Service
+curl http://localhost:8080/api/auth/health
+curl http://localhost:8080/api/users/health
+curl http://localhost:8080/api/notifications/health
 ```
 
 ## Environment Variables
@@ -535,10 +572,19 @@ JWT_SECRET=your-super-secret-jwt-key
 ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8085
 LOG_LEVEL=info
 
+# Notification Service
+PORT=8083
+MONGO_URI=mongodb://admin:password@mongodb:27017
+MONGO_DB=notification_db
+JWT_SECRET=your-super-secret-jwt-key
+ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8085
+KAFKA_BROKERS=kafka:9092
+KAFKA_GROUP_ID=notification-service-group
+KAFKA_TOPIC_USER_CREATED=user.created.v1
+KAFKA_DLQ_TOPIC=user.events.notification-service.dlq
+
 # API Gateway
 PORT=8080
-AUTH_SERVICE_URL=http://auth-service:8081
-USER_SERVICE_URL=http://user-service:8082
 LOG_LEVEL=info
 ```
 
@@ -570,7 +616,5 @@ LOG_LEVEL=debug
 
 # API Gateway
 PORT=8080
-AUTH_SERVICE_URL=http://auth-service:8081
-USER_SERVICE_URL=http://user-service:8082
 LOG_LEVEL=debug
 ```

@@ -98,7 +98,7 @@ Notes:
 
 ### Production environment
 
-Uses `deploy/docker-compose.prod.yml` with secrets from a root `.env` file. Only the API gateway and frontend are published; MongoDB, Kafka, auth, and user stay on the Docker network.
+Uses `deploy/docker-compose.prod.yml` with secrets from a root `.env` file. Only the API gateway and frontend are published; MongoDB, Kafka, and the auth, user, and notification services stay on the Docker network.
 
 Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL_FROM` in `.env` for verification and password-reset email delivery. Set `FRONTEND_URL` to the public frontend origin (for example `https://identity.example.com`) so email links resolve correctly. The local Compose stack can use the same SMTP variables.
 
@@ -142,6 +142,7 @@ Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL
    - API Gateway: http://localhost:8080
    - Auth Service: http://localhost:8081
    - User Service: http://localhost:8082
+   - Notification Service: http://localhost:8083
    - MongoDB: localhost:27017
 
 3. **Stop**:
@@ -157,9 +158,7 @@ Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `EMAIL
 The API Gateway provides centralized Swagger documentation for all microservices:
 
 - **Swagger UI**: http://localhost:8080/swagger/index.html
-- **API Documentation**: http://localhost:8080/docs
-- **OpenAPI JSON**: http://localhost:8080/swagger/doc.json
-- **OpenAPI YAML**: http://localhost:8080/swagger/doc.yaml
+- **OpenAPI YAML**: http://localhost:8080/swagger/openapi.yaml
 
 ### Documentation Features
 
@@ -183,6 +182,7 @@ The API documentation is organized by service:
 - `POST /api/auth/password/forgot` - Request password reset instructions
 - `POST /api/auth/password/reset` - Reset password using a single-use link token
 - `POST /api/auth/password` - Change password while signed in
+- `PUT /api/auth/profile` - Update the signed-in user's name or email
 - `DELETE /api/auth/account` - Delete the signed-in account after current-password confirmation
 - `PUT /api/auth/users/:id` - Admin profile and role update
 - `DELETE /api/auth/users/:id` - Admin customer deletion
@@ -199,6 +199,12 @@ The API documentation is organized by service:
 - `GET /api/users/list` - List users (paginated)
 - `PUT /api/users/profile/:id` - Update user profile
 - `DELETE /api/users/profile/:id` - Delete user profile
+
+#### Notification Service (`/api/notifications`)
+
+- `GET /api/notifications/preferences` - Read the signed-in user's email notification preference
+- `PUT /api/notifications/preferences` - Update the signed-in user's email notification preference
+- `GET /api/notifications/history?page=1&size=20` - Paginate the signed-in user's delivery history
 
 ### Account lifecycle
 
@@ -249,11 +255,18 @@ Verification and password-reset email delivery requires SMTP configuration. Set 
    - Cookie sessions via `withCredentials: true` (no token in localStorage)
    - Authentication and protected routes
 
+5. **Notification Service** (Port 8083)
+   - Notification preferences and delivery history
+   - Kafka consumer for `user.created.v1`
+   - SMTP welcome-email delivery
+   - Per-IP rate limiting and authenticated access
+
 ### Database
 
 - **MongoDB**: Database-per-service model
-- **Auth data**: `auth_db.auth_users` (owned by auth-service)
+- **Auth data**: `auth_db.auth_users` and `auth_db.user_sessions` (owned by auth-service)
 - **Profile data**: `user_db.user_profiles` (owned by user-service)
+- **Notification data**: `notification_db.notification_preferences` and `notification_db.notification_records` (owned by notification-service)
 
 ### Message Queue
 
@@ -355,6 +368,19 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 }
 ```
 
+### Correlation, trace, and span propagation
+
+The API gateway and auth, user, and notification services implement HTTP context propagation with these headers:
+
+- `X-Correlation-ID`: end-to-end request identifier; valid values contain 1–128 letters, digits, `.`, `_`, `:`, or `-`; missing or invalid values are replaced with a UUIDv4.
+- `X-Trace-ID`: 32-character hexadecimal trace identifier; a valid value is preserved and normalized to lowercase, while missing or invalid values receive a generated 32-character hex ID.
+- `X-Span-ID`: fresh 16-character hexadecimal span identifier generated for each HTTP hop.
+- `X-Parent-Span-ID`: set to the valid incoming `X-Span-ID` for child spans.
+
+The gateway generates or validates the context before proxying, then forwards the headers to downstream services. Every Gin-based backend service repeats validation and creates a new span for its own request hop. Structured HTTP logs include all four context fields. Responses include the effective correlation, trace, and span headers, and browser CORS configuration allows and exposes them.
+
+Lifecycle Kafka events include `trace_id` and `correlation_id` in both JSON payloads and Kafka headers. User and notification DLQ publications preserve those identifiers and add the original topic, partition, offset, processing-attempt count, and processing error. Kafka processing logs also include the context fields when available.
+
 ## Development Setup
 
 ### Backend Development
@@ -365,17 +391,17 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
    # Auth Service
    cd backend/auth-service
    go mod tidy
-   go run main.go
+   go run ./cmd/auth-service
 
    # User Service
    cd backend/user-service
    go mod tidy
-   go run main.go
+   go run ./cmd/user-service
 
    # API Gateway
    cd backend/api-gateway
    go mod tidy
-   go run main.go
+   go run ./cmd/api-gateway
    ```
 
 2. **Environment Variables**:
@@ -544,6 +570,7 @@ docker compose -f deploy/docker-compose.yml logs
 # View specific service logs
 docker compose -f deploy/docker-compose.yml logs auth-service
 docker compose -f deploy/docker-compose.yml logs user-service
+docker compose -f deploy/docker-compose.yml logs notification-service
 docker compose -f deploy/docker-compose.yml logs api-gateway
 docker compose -f deploy/docker-compose.yml logs frontend
 ```
@@ -586,11 +613,13 @@ docker compose -f deploy/docker-compose.test.yml logs
 # Build individual services
 docker build -t auth-service backend/auth-service/
 docker build -t user-service backend/user-service/
+docker build -t notification-service backend/notification-service/
 docker build -t api-gateway backend/api-gateway/
 
 # Run individual services
 docker run -p 8081:8081 auth-service
 docker run -p 8082:8082 user-service
+docker run -p 8083:8083 notification-service
 docker run -p 8080:8080 api-gateway
 ```
 
@@ -601,6 +630,10 @@ docker run -p 8080:8080 api-gateway
 curl http://localhost:8080/health  # API Gateway
 curl http://localhost:8081/health  # Auth Service
 curl http://localhost:8082/health  # User Service
+curl http://localhost:8083/health  # Notification Service
+curl http://localhost:8080/api/auth/health
+curl http://localhost:8080/api/users/health
+curl http://localhost:8080/api/notifications/health
 
 # Production (only gateway + frontend are published)
 curl http://localhost:8080/health
@@ -613,10 +646,10 @@ curl http://localhost:8085
 ### Common Issues
 
 1. **Port conflicts (local/test)**: Ensure ports 8080, 8081, 8082, 8085, 27017, and 9092 are available
-2. **Port conflicts (prod)**: Ensure ports 8080 and 8085 are available (Mongo/Kafka/auth/user are not host-published)
+2. **Port conflicts (prod)**: Ensure ports 8080 and 8085 are available (Mongo/Kafka/auth/user/notification are not host-published)
 3. **MongoDB connection**: Check if MongoDB is running and accessible; for prod, confirm `.env` credentials match the volume
 4. **Service communication**: Verify service URLs in API Gateway configuration
-5. **Authentication errors**: Check `JWT_SECRET` matches across auth-service and user-service; verify cookies are sent (`withCredentials: true` in browser, `-b` in curl)
+5. **Authentication errors**: Check `JWT_SECRET` matches across auth, user, and notification services; verify cookies are sent (`withCredentials: true` in browser, `-b` in curl)
 6. **Missing `.env` (prod)**: Run `./deploy.sh` once, or create `.env` from the Production Environment section below
 
 7. **Image pull/DNS errors**: If you see errors like `server misbehaving` when pulling base images, try:
@@ -668,6 +701,7 @@ Inside the compose stack, services also use:
 MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017
 MONGO_DB=auth_db   # auth-service
 MONGO_DB=user_db   # user-service
+MONGO_DB=notification_db # notification-service
 GIN_MODE=release
 KAFKA_BROKERS=kafka:9092
 ```
@@ -693,10 +727,15 @@ MONGO_DB=user_db
 KAFKA_CLIENT_ID=user-service-test
 KAFKA_GROUP_ID=user-service-group-test
 
+# Notification Service
+PORT=8083
+MONGO_URI=mongodb://admin:password123@mongodb:27017
+MONGO_DB=notification_db
+JWT_SECRET=test-jwt-secret-key-for-testing
+KAFKA_GROUP_ID=notification-service-group-test
+
 # API Gateway
 PORT=8080
-AUTH_SERVICE_URL=http://auth-service:8081
-USER_SERVICE_URL=http://user-service:8082
 
 # Kafka
 KAFKA_BROKERS=kafka:9092
@@ -712,6 +751,7 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 - **User Authentication**: HttpOnly cookie session (JWT in `access_token` cookie)
 - **Account Lifecycle**: Email verification, password reset, profile email re-verification, self-service deletion, and admin account controls
 - **User Management**: Complete CRUD operations for user profiles
+- **Notification Preferences**: Authenticated email preferences and paginated delivery history
 - **API Gateway**: Single entry point with routing and middleware
 - **MongoDB Integration**: Service-owned databases with event-driven sync
 - **Event-Driven Communication**: Kafka-based async messaging between services
@@ -725,7 +765,7 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 
 ### Verified Achievements
 
-- **Backend Build Validation**: Auth Service, User Service, and API Gateway compile successfully.
+- **Backend Build Validation**: Auth, User, Notification, and API Gateway services compile successfully.
 - **Frontend Production Build**: Angular production bundle builds successfully.
 - **Deployment Configuration Validation**: Local and test Docker Compose configurations are valid.
 - **Production Configuration Validation**: Production Docker Compose configuration is valid when supplied with the required environment variables.
@@ -734,7 +774,7 @@ KAFKA_TOPIC_USER_DELETED=user.deleted.v1
 - **Docker Containerization**: Backend services and the frontend have dedicated container images.
 - **Cookie-Based Authentication**: Authentication uses an HttpOnly `access_token` cookie with protected routes.
 - **API Gateway**: Centralized routing connects clients to the backend services.
-- **Auth and User Services**: Authentication and user profile management are implemented as separate services.
+- **Backend Services**: Authentication, user profile management, notifications, and API routing are implemented as separate services.
 - **Message Queues**: Kafka integration for async communication
 - **Structured Logging**: Zap-based JSON logging
 - **API Documentation**: Swagger/OpenAPI documentation

@@ -119,12 +119,22 @@ flowchart LR
 
 1. The frontend sends requests to the API gateway.
 2. The gateway routes the request to the relevant microservice.
-3. Auth service handles login, registration, token validation, refresh, and logout.
+3. Auth service handles login, registration, verification, password/session lifecycle, token validation, refresh, and logout.
 4. User service handles profile retrieval, updates, listing, and deletion.
 5. JWT is stored in an HttpOnly cookie named `access_token`.
 6. Events are published to Kafka when user lifecycle changes occur.
 7. User service consumes those events to keep the profile database synchronized.
 8. Notification service consumes `user.created.v1`, checks the user's email preference, and records the welcome-email outcome. Browser clients can only read or update their own preference and history through the gateway.
+9. Failed consumer events are retried with backoff and written to service-specific DLQ topics after the retry budget is exhausted.
+
+## Tracing and correlation
+
+- The API gateway validates or creates `X-Correlation-ID` and `X-Trace-ID`, generates a 16-character hexadecimal `X-Span-ID`, and propagates the context to proxy targets.
+- Auth, user, and notification routers validate the same headers and generate a new span for each service hop. A valid incoming `X-Span-ID` becomes `X-Parent-Span-ID`; a forged or malformed parent is discarded.
+- HTTP response headers expose the effective correlation, trace, and span IDs. CORS allows and exposes the tracing headers to browser clients.
+- Structured service logs include `correlation_id`, `trace_id`, `span_id`, and `parent_span_id`.
+- Auth lifecycle events store `trace_id` and `correlation_id` in the event payload and publish matching Kafka headers.
+- Consumer and DLQ logs preserve trace/correlation context. DLQ messages include source topic, partition, offset, processing attempt count, and processing error.
 
 ## Notes
 
@@ -134,3 +144,4 @@ flowchart LR
 - `notification-service` owns `notification_db` preferences and delivery history.
 - The API gateway is the single entry point for frontend traffic.
 - Cookie-based auth is used for browser sessions, and token validation also supports bearer-token fallback in some flows.
+- The gateway exposes `/health` and proxied service health endpoints at `/api/auth/health`, `/api/users/health`, and `/api/notifications/health`.
