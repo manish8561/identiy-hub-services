@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -21,12 +22,17 @@ func Span() gin.HandlerFunc {
 			parentSpanID = strings.ToLower(parentSpanID)
 		}
 
-		id, err := uuid.NewRandom()
-		if err != nil {
-			c.AbortWithStatusJSON(500, gin.H{"error": "failed to create span ID"})
-			return
+		spanID := ""
+		if sc := trace.SpanContextFromContext(c.Request.Context()); sc.IsValid() {
+			spanID = sc.SpanID().String()
+		} else {
+			id, err := uuid.NewRandom()
+			if err != nil {
+				c.AbortWithStatusJSON(500, gin.H{"error": "failed to create span ID"})
+				return
+			}
+			spanID = strings.ReplaceAll(id.String(), "-", "")[:16]
 		}
-		spanID := strings.ReplaceAll(id.String(), "-", "")[:16]
 		c.Request.Header.Set(SpanIDHeader, spanID)
 		c.Request.Header.Del(ParentSpanIDHeader)
 		c.Writer.Header().Set(SpanIDHeader, spanID)
@@ -42,7 +48,7 @@ func Span() gin.HandlerFunc {
 }
 
 func validSpanID(id string) bool {
-	if len(id) != 16 {
+	if len(id) != 16 || id == "0000000000000000" {
 		return false
 	}
 	for _, char := range id {

@@ -13,6 +13,7 @@ import (
 func New(handler *handlers.NotificationHandler, secret string, origins []string, log *zap.Logger) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.OpenTelemetry())
 	r.Use(middleware.CorrelationID())
 	r.Use(middleware.TraceID())
 	r.Use(middleware.Span())

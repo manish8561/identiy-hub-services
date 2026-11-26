@@ -6,6 +6,7 @@ import (
 
 	kratoslog "github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const correlationIDHeader = "X-Correlation-ID"
@@ -47,7 +48,9 @@ func withCorrelationID(next http.Handler) http.Handler {
 		}
 
 		traceID := r.Header.Get(traceIDHeader)
-		if !validTraceID(traceID) {
+		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+			traceID = sc.TraceID().String()
+		} else if !validTraceID(traceID) {
 			traceID = strings.ReplaceAll(uuid.NewString(), "-", "")
 		} else {
 			traceID = strings.ToLower(traceID)
@@ -59,10 +62,16 @@ func withCorrelationID(next http.Handler) http.Handler {
 		} else {
 			parentSpanID = strings.ToLower(parentSpanID)
 		}
-		spanID, err := newSpanID()
-		if err != nil {
-			http.Error(w, "failed to create span ID", http.StatusInternalServerError)
-			return
+		spanID := ""
+		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+			spanID = sc.SpanID().String()
+		} else {
+			var err error
+			spanID, err = newSpanID()
+			if err != nil {
+				http.Error(w, "failed to create span ID", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		r.Header.Set(correlationIDHeader, id)
@@ -84,7 +93,7 @@ func withCorrelationID(next http.Handler) http.Handler {
 }
 
 func validSpanID(id string) bool {
-	if len(id) != 16 {
+	if len(id) != 16 || id == "0000000000000000" {
 		return false
 	}
 	for _, char := range id {
@@ -105,7 +114,7 @@ func newSpanID() (string, error) {
 }
 
 func validTraceID(id string) bool {
-	if len(id) != 32 {
+	if len(id) != 32 || id == "00000000000000000000000000000000" {
 		return false
 	}
 	for _, char := range id {

@@ -8,6 +8,10 @@ import (
 	"user-service/internal/models"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // KafkaPublisher publishes user lifecycle events.
@@ -59,11 +63,28 @@ func (p *KafkaPublisher) publish(ctx context.Context, topic string, event models
 		return err
 	}
 
-	return p.writer.WriteMessages(ctx, kafka.Message{
-		Topic: topic,
-		Key:   []byte(event.UserID),
-		Value: payload,
+	ctx, span := otel.Tracer("user-service/kafka").Start(ctx, "publish "+topic, oteltrace.WithSpanKind(oteltrace.SpanKindProducer))
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	headers := []kafka.Header{
+		{Key: "x-trace-id", Value: []byte(event.TraceID)},
+		{Key: "x-correlation-id", Value: []byte(event.CorrelationID)},
+	}
+	for key, value := range carrier {
+		headers = append(headers, kafka.Header{Key: key, Value: []byte(value)})
+	}
+	err = p.writer.WriteMessages(ctx, kafka.Message{
+		Topic:   topic,
+		Key:     []byte(event.UserID),
+		Value:   payload,
+		Headers: headers,
 	})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	span.End()
+	return err
 }
 
 // PublishUserCreated publishes user.created.v1.

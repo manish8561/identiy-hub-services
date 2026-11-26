@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const TraceIDHeader = "X-Trace-ID"
@@ -12,7 +13,9 @@ const TraceIDHeader = "X-Trace-ID"
 func TraceID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(TraceIDHeader)
-		if !validTraceID(id) {
+		if sc := trace.SpanContextFromContext(c.Request.Context()); sc.IsValid() {
+			id = sc.TraceID().String()
+		} else if !validTraceID(id) {
 			id = strings.ReplaceAll(uuid.NewString(), "-", "")
 		} else {
 			id = strings.ToLower(id)
@@ -26,7 +29,7 @@ func TraceID() gin.HandlerFunc {
 }
 
 func validTraceID(id string) bool {
-	if len(id) != 32 {
+	if len(id) != 32 || id == "00000000000000000000000000000000" {
 		return false
 	}
 	for _, char := range id {

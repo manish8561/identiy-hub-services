@@ -3,6 +3,19 @@
 # Or via: ./deploy.sh
 
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.139.0
+    container_name: otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol-contrib/config.yml"]
+    expose:
+      - "4317"
+      - "4318"
+    volumes:
+      - ./otel-collector.yml:/etc/otelcol-contrib/config.yml:ro
+    networks:
+      - microservices-network
+
   mongodb:
     image: mongo:8.0
     container_name: mongodb
@@ -75,6 +88,8 @@ services:
       - KAFKA_TOPIC_USER_DELETED=user.deleted.v1
       - GIN_MODE=release
       - LOG_LEVEL=${LOG_LEVEL:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=auth-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -112,6 +127,8 @@ services:
       - KAFKA_DLQ_TOPIC=user.events.user-service.dlq
       - GIN_MODE=release
       - LOG_LEVEL=${LOG_LEVEL:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=user-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -152,6 +169,8 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-}
       - GIN_MODE=release
       - LOG_LEVEL=${LOG_LEVEL:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=notification-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -177,6 +196,8 @@ services:
     environment:
       - PORT=8080
       - LOG_LEVEL=${LOG_LEVEL:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=api-gateway
     command: ["./api-gateway", "-conf", "/data/conf/config.yaml"]
     depends_on:
       auth-service:

@@ -6,17 +6,35 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"user-service/internal/config"
 	"user-service/internal/handlers"
 	"user-service/internal/logger"
 	"user-service/internal/router"
 	"user-service/internal/services"
+	"user-service/internal/telemetry"
 
 	"go.uber.org/zap"
 )
 
 func main() {
+	telemetryCtx, cancelTelemetry := context.WithTimeout(context.Background(), 10*time.Second)
+	tracerProvider, err := telemetry.Init(telemetryCtx, "user-service")
+	cancelTelemetry()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize OpenTelemetry: %v\n", err)
+	}
+	if tracerProvider != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to shut down OpenTelemetry: %v\n", err)
+			}
+		}()
+	}
+
 	// Initialize logger
 	log, err := logger.NewZapLogger()
 	if err != nil {

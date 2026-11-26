@@ -8,6 +8,7 @@ import (
 	"api-gateway/internal/router"
 	"api-gateway/internal/service"
 
+	"api-gateway/internal/telemetry"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -23,7 +24,10 @@ func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.L
 	}
 
 	var opts = []kratoshttp.ServerOption{
-		kratoshttp.Filter(router.CorrelationID(logger)),
+		kratoshttp.Filter(kratoshttp.FilterChain(
+			telemetry.HTTPFilter,
+			router.CorrelationID(logger),
+		)),
 		kratoshttp.Middleware(
 			recovery.Recovery(),
 		),

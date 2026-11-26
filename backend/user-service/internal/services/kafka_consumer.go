@@ -12,6 +12,10 @@ import (
 	"user-service/internal/models"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -138,7 +142,14 @@ func (c *UserEventConsumer) consumeLoop(ctx context.Context, reader *kafka.Reade
 			continue
 		}
 
-		attempts, processErr := retryMessage(ctx, maxProcessingAttempts, retryBackoff, func() error {
+		carrier := propagation.MapCarrier{}
+		for _, header := range msg.Headers {
+			carrier[strings.ToLower(header.Key)] = string(header.Value)
+		}
+		processCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
+		processCtx, span := otel.Tracer("user-service/kafka").Start(processCtx, "process "+msg.Topic, oteltrace.WithSpanKind(oteltrace.SpanKindConsumer))
+
+		attempts, processErr := retryMessage(processCtx, maxProcessingAttempts, retryBackoff, func() error {
 			var event models.UserEvent
 			if err := json.Unmarshal(msg.Value, &event); err != nil {
 				return fmt.Errorf("unmarshal user event: %w", err)
@@ -146,13 +157,21 @@ func (c *UserEventConsumer) consumeLoop(ctx context.Context, reader *kafka.Reade
 			return c.handleEvent(msg.Topic, event)
 		})
 		if processErr != nil {
+			span.RecordError(processErr)
+			span.SetStatus(codes.Error, processErr.Error())
+		}
+		if processErr != nil {
 			traceID := kafkaHeaderValue(msg.Headers, "x-trace-id")
 			correlationID := kafkaHeaderValue(msg.Headers, "x-correlation-id")
-			if traceID == "" {
+			if traceID == "" || correlationID == "" {
 				var event models.UserEvent
 				if json.Unmarshal(msg.Value, &event) == nil {
-					traceID = event.TraceID
-					correlationID = event.CorrelationID
+					if traceID == "" {
+						traceID = event.TraceID
+					}
+					if correlationID == "" {
+						correlationID = event.CorrelationID
+					}
 				}
 			}
 			c.logger.Error("Failed to process user event",
@@ -163,9 +182,11 @@ func (c *UserEventConsumer) consumeLoop(ctx context.Context, reader *kafka.Reade
 				zap.String("correlation_id", correlationID),
 			)
 			if errors.Is(processErr, context.Canceled) || ctx.Err() != nil {
+				span.End()
 				return
 			}
 			if err := c.publishDeadLetterWithRetry(ctx, msg, attempts, processErr); err != nil {
+				span.End()
 				return
 			}
 		}
@@ -191,6 +212,7 @@ func (c *UserEventConsumer) consumeLoop(ctx context.Context, reader *kafka.Reade
 		if err := reader.CommitMessages(ctx, msg); err != nil {
 			c.logger.Error("Failed to commit Kafka message", zap.Error(err))
 		}
+		span.End()
 	}
 }
 

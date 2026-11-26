@@ -11,6 +11,10 @@ import (
 	"notification-service/internal/models"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -74,21 +78,36 @@ func (c *EventConsumer) Start(ctx context.Context) {
 			}
 			continue
 		}
-		attempts, processErr := retryMessage(ctx, maxProcessingAttempts, retryBackoff, func() error {
+		carrier := propagation.MapCarrier{}
+		for _, header := range message.Headers {
+			carrier[strings.ToLower(header.Key)] = string(header.Value)
+		}
+		processCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
+		processCtx, span := otel.Tracer("notification-service/kafka").Start(processCtx, "process "+message.Topic, oteltrace.WithSpanKind(oteltrace.SpanKindConsumer))
+
+		attempts, processErr := retryMessage(processCtx, maxProcessingAttempts, retryBackoff, func() error {
 			var event models.UserEvent
 			if err := json.Unmarshal(message.Value, &event); err != nil {
 				return fmt.Errorf("unmarshal user-created event: %w", err)
 			}
-			return c.service.HandleUserCreated(ctx, event)
+			return c.service.HandleUserCreated(processCtx, event)
 		})
+		if processErr != nil {
+			span.RecordError(processErr)
+			span.SetStatus(codes.Error, processErr.Error())
+		}
 		if processErr != nil {
 			traceID := kafkaHeaderValue(message.Headers, "x-trace-id")
 			correlationID := kafkaHeaderValue(message.Headers, "x-correlation-id")
-			if traceID == "" {
+			if traceID == "" || correlationID == "" {
 				var event models.UserEvent
 				if json.Unmarshal(message.Value, &event) == nil {
-					traceID = event.TraceID
-					correlationID = event.CorrelationID
+					if traceID == "" {
+						traceID = event.TraceID
+					}
+					if correlationID == "" {
+						correlationID = event.CorrelationID
+					}
 				}
 			}
 			c.logger.Error("failed to persist notification outcome",
@@ -99,9 +118,11 @@ func (c *EventConsumer) Start(ctx context.Context) {
 				zap.String("correlation_id", correlationID),
 			)
 			if errors.Is(processErr, context.Canceled) || ctx.Err() != nil {
+				span.End()
 				return
 			}
 			if err := c.publishDeadLetterWithRetry(ctx, message, attempts, processErr); err != nil {
+				span.End()
 				return
 			}
 		}
@@ -126,6 +147,7 @@ func (c *EventConsumer) Start(ctx context.Context) {
 		if err := c.reader.CommitMessages(ctx, message); err != nil {
 			c.logger.Error("failed to commit user-created event", zap.Error(err))
 		}
+		span.End()
 	}
 }
 

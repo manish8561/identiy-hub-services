@@ -135,6 +135,8 @@ flowchart LR
 - Structured service logs include `correlation_id`, `trace_id`, `span_id`, and `parent_span_id`.
 - Auth lifecycle events store `trace_id` and `correlation_id` in the event payload and publish matching Kafka headers.
 - Consumer and DLQ logs preserve trace/correlation context. DLQ messages include source topic, partition, offset, processing attempt count, and processing error.
+- All Go services initialize an OpenTelemetry tracer provider, extract and inject W3C `traceparent` context, and export traces over OTLP/gRPC to the OpenTelemetry Collector.
+- Kafka producer and consumer spans carry W3C context in message headers. Custom `X-*` and lifecycle-event fields remain for application correlation and backward compatibility.
 
 ## Notes
 

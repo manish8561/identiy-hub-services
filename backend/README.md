@@ -114,6 +114,8 @@ The gateway applies this context before routing and forwards it to auth, user, a
 
 HTTP logging middleware records `correlation_id`, `trace_id`, `span_id`, and `parent_span_id`. Auth lifecycle events carry `trace_id` and `correlation_id` in JSON and Kafka headers. User and notification consumers log those fields and copy them to DLQ metadata, alongside original-topic, partition, offset, processing-attempt, and processing-error details.
 
+OpenTelemetry SDK tracing is enabled for the API gateway and all Gin services. Incoming W3C `traceparent` context is extracted, HTTP and Kafka spans are created, and `traceparent`/`tracestate` are injected into downstream HTTP and Kafka messages. Traces are exported over OTLP/gRPC to `otel-collector:4317`; the collector configuration is at `deploy/otel-collector.yml`.
+
 ## Directory Structure
 
 ```
