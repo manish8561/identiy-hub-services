@@ -381,6 +381,12 @@ The gateway generates or validates the context before proxying, then forwards th
 
 Lifecycle Kafka events include `trace_id` and `correlation_id` in both JSON payloads and Kafka headers. User and notification DLQ publications preserve those identifiers and add the original topic, partition, offset, processing-attempt count, and processing error. Kafka processing logs also include the context fields when available.
 
+### OpenTelemetry tracing
+
+The API gateway and all three Gin services initialize an OpenTelemetry SDK tracer provider. HTTP requests extract W3C Trace Context (`traceparent` and `tracestate`) and create service spans; the gateway injects the active context when forwarding requests. Kafka producer and consumer spans use the same W3C propagator through Kafka message headers. The existing `X-Correlation-ID`, `X-Trace-ID`, `X-Span-ID`, and `X-Parent-Span-ID` headers remain for application-level correlation and compatibility.
+
+Both Compose stacks run the OpenTelemetry Collector. Services export OTLP/gRPC to `otel-collector:4317` by default; override `OTEL_EXPORTER_OTLP_ENDPOINT` when running services outside Compose. Service names are set through `OTEL_SERVICE_NAME` in Compose. The collector currently uses its debug exporter, so received spans appear in collector logs; a trace backend (such as Jaeger or Tempo) is not configured, and metrics are not yet instrumented.
+
 ## Development Setup
 
 ### Backend Development
@@ -794,7 +800,7 @@ Priority areas:
 
 - **P0 security and correctness**: secret-provider integration, MFA/passkeys, abuse controls, security audit events, centralized authorization, and end-to-end security tests.
 - **P1 reliability and quality**: integration/contract tests, CI pipelines, event schema contracts, idempotency/reconciliation, backups and restore testing, API compatibility, and dependency upgrades.
-- **P1 observability**: OpenTelemetry instrumentation, Prometheus/Grafana, operational dashboards, readiness checks, alerting, and runbooks. `X-Correlation-ID`, `X-Trace-ID`, and per-hop `X-Span-ID`/`X-Parent-Span-ID` propagation across the gateway and backend services is implemented.
+- **P1 observability**: OpenTelemetry distributed tracing and OTLP export are implemented for HTTP and Kafka flows. Remaining work includes Prometheus/Grafana metrics and dashboards, readiness checks, alerting, runbooks, and a persistent trace backend. `X-Correlation-ID`, `X-Trace-ID`, and per-hop `X-Span-ID`/`X-Parent-Span-ID` propagation is also implemented.
 - **P2 product and infrastructure**: additional notification channels, Kubernetes/Helm, load balancing and discovery, circuit breakers, OIDC/SAML federation, multi-tenancy, privacy controls, and deployment promotion/rollback.
 
 ## Proposed Implementation Roadmap

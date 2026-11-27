@@ -158,6 +158,8 @@ flowchart TD
 - User and notification consumers use bounded retries and service-specific DLQ topics; auth registration writes pending lifecycle events for reconciliation after Kafka outages.
 - HTTP tracing is implemented at the gateway and every backend service. `X-Correlation-ID` identifies an end-to-end request, `X-Trace-ID` identifies the distributed trace, `X-Span-ID` identifies the current hop, and `X-Parent-Span-ID` identifies the incoming parent span. Invalid or missing IDs are replaced according to service validation rules. The effective headers are returned to HTTP callers and included in service logs.
 - Lifecycle Kafka records and Kafka headers carry trace and correlation IDs. DLQ records carry those IDs plus source topic/partition/offset and processing failure metadata.
+- The API gateway and all Gin services initialize OpenTelemetry SDK tracer providers, extract W3C Trace Context from inbound HTTP requests, create HTTP spans, and propagate context to downstream requests. Kafka producer/consumer spans also extract or inject W3C context through message headers. OTLP/gRPC traces are sent to the Compose OpenTelemetry Collector at `otel-collector:4317`.
+- The current collector pipeline uses the debug exporter, so spans are emitted to collector logs and are not persisted in a trace backend. OpenTelemetry metrics and a persistent trace backend are not yet configured. Existing `X-*` headers and lifecycle-event fields are retained for application correlation and compatibility.
 - The gateway acts as the single public interface for client traffic
 - The backend supports both local containerized runs and production deployment via Docker Compose and the `deploy.sh` helper
 
@@ -196,7 +198,7 @@ Proposed follow-up work. Items are prioritized; higher priority should land befo
 ### P1 — Observability
 
 1. ~~**Correlation, trace, and span ID propagation**~~ — ✅ Done: `X-Correlation-ID` is validated or generated as UUIDv4 and `X-Trace-ID` as 32-character hex at the gateway and each service. Each HTTP hop gets a fresh 16-character hex `X-Span-ID`, with its caller's span recorded as `X-Parent-Span-ID`. The IDs are returned to callers, propagated on HTTP requests, and included in service request logs. Lifecycle Kafka events and DLQ messages carry trace/correlation IDs in payloads and headers. Browser CORS allows and exposes the HTTP tracing headers.
-2. **OpenTelemetry** instrumentation for distributed traces and metrics.
+2. ~~**OpenTelemetry distributed tracing**~~ — ✅ Done: SDK HTTP and Kafka spans, W3C Trace Context propagation, and OTLP/gRPC export to the Compose collector are enabled for all Go services. The current collector debug exporter is non-persistent; add a trace backend and OpenTelemetry metrics as follow-up observability work.
 3. **Prometheus + Grafana** for request latency, error rates, Kafka consumer lag, and notification delivery outcomes.
 4. **Structured audit and operational dashboards** — Add dashboards for auth success/failure, session revocations, password resets, account state changes, DLQ depth, replay activity, MongoDB health, and SMTP failure rates.
 5. **Health and readiness semantics** — Separate process liveness from dependency readiness. Report MongoDB and Kafka connectivity, and avoid exposing internal dependency details to unauthenticated clients.

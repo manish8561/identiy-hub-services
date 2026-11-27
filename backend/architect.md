@@ -137,6 +137,7 @@ flowchart LR
 - Consumer and DLQ logs preserve trace/correlation context. DLQ messages include source topic, partition, offset, processing attempt count, and processing error.
 - All Go services initialize an OpenTelemetry tracer provider, extract and inject W3C `traceparent` context, and export traces over OTLP/gRPC to the OpenTelemetry Collector.
 - Kafka producer and consumer spans carry W3C context in message headers. Custom `X-*` and lifecycle-event fields remain for application correlation and backward compatibility.
+- Both Compose stacks start the collector using `deploy/otel-collector.yml`; its current debug exporter emits spans to collector logs without persistent storage. A trace backend and OpenTelemetry metrics remain future work.
 
 ## Notes
 

@@ -114,7 +114,9 @@ The gateway applies this context before routing and forwards it to auth, user, a
 
 HTTP logging middleware records `correlation_id`, `trace_id`, `span_id`, and `parent_span_id`. Auth lifecycle events carry `trace_id` and `correlation_id` in JSON and Kafka headers. User and notification consumers log those fields and copy them to DLQ metadata, alongside original-topic, partition, offset, processing-attempt, and processing-error details.
 
-OpenTelemetry SDK tracing is enabled for the API gateway and all Gin services. Incoming W3C `traceparent` context is extracted, HTTP and Kafka spans are created, and `traceparent`/`tracestate` are injected into downstream HTTP and Kafka messages. Traces are exported over OTLP/gRPC to `otel-collector:4317`; the collector configuration is at `deploy/otel-collector.yml`.
+OpenTelemetry SDK tracing is enabled for the API gateway and all Gin services. Incoming W3C `traceparent`/`tracestate` context is extracted, HTTP and Kafka spans are created, and context is injected into downstream HTTP and Kafka messages. Each service configures an OTLP/gRPC exporter to `otel-collector:4317` by default; override `OTEL_EXPORTER_OTLP_ENDPOINT` when running outside Compose. Both Compose stacks start the collector from `deploy/otel-collector.yml`.
+
+The collector currently uses its debug exporter, which writes received spans to collector logs rather than storing them in a trace backend. A persistent backend (such as Jaeger or Tempo) and OpenTelemetry metrics are not configured yet. The custom `X-*` headers and lifecycle-event trace/correlation fields remain for compatibility and application-level correlation.
 
 ## Directory Structure
 
@@ -505,7 +507,7 @@ logger.GetLogger().Error("Database connection failed",
 
 ## Future Enhancements
 
-The backend roadmap is maintained in the repository-level [architecture document](../architect.md). `X-Correlation-ID` accepts 1–128 alphanumeric or `._:-` characters; absent or invalid values are replaced with a random UUIDv4. `X-Trace-ID` accepts 32 hexadecimal characters and is propagated unchanged across services. Each HTTP hop generates a fresh 16-character hex `X-Span-ID`; a valid incoming span ID becomes `X-Parent-Span-ID`. Correlation/trace IDs are included in HTTP and Kafka processing logs, lifecycle event payloads and Kafka headers, and DLQ metadata. HTTP tracing headers are returned on responses; CORS permits and exposes them to browsers. Current follow-up priorities are secret management, MFA/passkeys, security audit trails, centralized authorization, end-to-end and contract testing, CI, schema compatibility, reconciliation tooling, OpenTelemetry, Prometheus/Grafana, alerting, Kubernetes/Helm, and service discovery/load balancing.
+The backend roadmap is maintained in the repository-level [architecture document](../architect.md). `X-Correlation-ID` accepts 1–128 alphanumeric or `._:-` characters; absent or invalid values are replaced with a random UUIDv4. `X-Trace-ID` accepts 32 hexadecimal characters and is propagated unchanged across services. Each HTTP hop generates a fresh 16-character hex `X-Span-ID`; a valid incoming span ID becomes `X-Parent-Span-ID`. Correlation/trace IDs are included in HTTP and Kafka processing logs, lifecycle event payloads and Kafka headers, and DLQ metadata. HTTP tracing headers are returned on responses; CORS permits and exposes them to browsers. OpenTelemetry distributed tracing and OTLP export are implemented; follow-up priorities include secret management, MFA/passkeys, security audit trails, centralized authorization, end-to-end and contract testing, CI, schema compatibility, reconciliation tooling, persistent trace storage, metrics, Prometheus/Grafana, alerting, Kubernetes/Helm, and service discovery/load balancing.
 
 ## Troubleshooting
 
